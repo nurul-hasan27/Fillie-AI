@@ -1448,6 +1448,18 @@ function applySettingsBinding(
         const apiKeys = { ...((next.config.apiKeys as Record<string, string>) ?? {}) };
         apiKeys[providerId] = value.trim().replace(/^["']|["']$/g, '').trim();
         next.config.apiKeys = apiKeys;
+        // Typing does not re-render, so the row's Test button and badge are updated in place.
+        const row = app.querySelector<HTMLElement>(`.provider-row[data-provider="${providerId}"]`);
+        if (row) {
+          const hasKey = Boolean(apiKeys[providerId]);
+          row.setAttribute('data-ready', String(hasKey));
+          row.querySelector<HTMLButtonElement>('[data-action="test-provider"]')?.toggleAttribute('disabled', !hasKey);
+          const chip = row.querySelector('.provider-head .ff-chip');
+          if (chip) {
+            chip.textContent = hasKey ? 'Key added' : 'No key';
+            chip.classList.toggle('ff-chip-accent', hasKey);
+          }
+        }
       } else if (field === 'model') {
         next.providerModels = { ...(next.providerModels as object), [providerId]: value.trim() };
       } else {
