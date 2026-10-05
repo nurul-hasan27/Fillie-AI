@@ -46,7 +46,7 @@ export function stars(app: Application): TemplateResult {
   return html`
     <span class="stars" role="group" aria-label="${escapeHtml(label)}" title="${escapeHtml(label)}">
       ${[1, 2, 3, 4, 5].map(
-        (n) => html`<button class="star" type="button" data-action="rate-app" data-id="${escapeHtml(app.id)}" data-value="${n}" data-on="${(app.rating ?? 0) >= n}" aria-label="${n} star${n > 1 ? 's' : ''}">★</button>`,
+        (n) => html`<button class="star" type="button" data-action="rate-app" data-id="${escapeHtml(app.id)}" data-value="${n}" data-on="${String((app.rating ?? 0) >= n)}" aria-label="${n} star${n > 1 ? 's' : ''}">★</button>`,
       )}
       ${app.ratingSource === 'ai' && app.rating ? html`<span class="ai-badge" title="Suggested by AI. Change it if you disagree.">AI</span>` : ''}
     </span>
@@ -142,7 +142,7 @@ export function databaseView(state: DatabaseState): TemplateResult {
 export function applicationEditor(app: Application, isNew: boolean): TemplateResult {
   return html`
     <div class="modal-backdrop" data-action="close-editor">
-      <form class="modal" id="app-form" role="dialog" aria-modal="true" aria-labelledby="app-form-title" data-id="${escapeHtml(app.id)}" data-new="${isNew}">
+      <form class="modal" id="app-form" role="dialog" aria-modal="true" aria-labelledby="app-form-title" data-id="${escapeHtml(app.id)}" data-new="${String(isNew)}">
         <h2 id="app-form-title">${isNew ? 'Add application' : 'Edit application'}</h2>
         <div class="grid-2">
           <div class="ff-field"><label class="ff-field-label" for="af-company">Company</label>
@@ -170,7 +170,7 @@ export function applicationEditor(app: Application, isNew: boolean): TemplateRes
           <div class="ff-field"><span class="ff-field-label">Your rating</span>
             <div class="rating-edit" role="radiogroup" aria-label="Rating">
               ${[1, 2, 3, 4, 5].map(
-                (n) => html`<label class="star" data-on="${(app.rating ?? 0) >= n}"><input type="radio" name="rating" value="${n}" ${app.rating === n ? 'checked' : ''} hidden />★</label>`,
+                (n) => html`<label class="star" data-on="${String((app.rating ?? 0) >= n)}"><input type="radio" name="rating" value="${n}" ${app.rating === n ? 'checked' : ''} hidden />★</label>`,
               )}
               <button class="ff-btn ff-btn-ghost ff-btn-sm" type="button" data-action="clear-rating">Clear</button>
             </div>

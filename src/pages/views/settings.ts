@@ -180,7 +180,7 @@ function providerRow(id: AIProviderId, index: number, settings: AISettings, test
   const listId = `models-${id}`;
 
   return html`
-    <article class="provider-row" data-provider="${id}" data-ready="${hasKey}">
+    <article class="provider-row" data-provider="${id}" data-ready="${String(hasKey)}">
       <div class="provider-rank">
         <span class="provider-rank-num">${index + 1}</span>
         <div class="provider-rank-btns">
@@ -226,7 +226,7 @@ function providerRow(id: AIProviderId, index: number, settings: AISettings, test
             <span data-icon="${test.testing ? 'refresh' : 'send'}" data-size="13"></span>
             ${test.testing ? 'Testing…' : 'Test'}
           </button>
-          ${test.message ? html`<span class="provider-test" data-ok="${Boolean(test.ok)}">${escapeHtml(test.message)}</span>` : ''}
+          ${test.message ? html`<span class="provider-test" data-ok="${String(Boolean(test.ok))}">${escapeHtml(test.message)}</span>` : ''}
         </div>
       </div>
     </article>

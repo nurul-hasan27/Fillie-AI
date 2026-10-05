@@ -379,26 +379,26 @@ test.describe('memory tab', () => {
 });
 
 test.describe('settings tab', () => {
-  test('switches the AI provider and keeps the choice', async ({ fillie }) => {
+  const row = (id: string) => `.provider-row[data-provider="${id}"]`;
+  const testButton = (id: string) => `[data-action="test-provider"][data-id="${id}"]`;
+  type Settings = {
+    enabled: boolean;
+    providerOrder: string[];
+    providerModels: Record<string, string>;
+    providerBaseUrls: Record<string, string>;
+    config: Record<string, unknown> & { apiKeys?: Record<string, string> };
+  } & Record<string, unknown>;
+  const settingsOf = (fillie: Fixtures) => fillie.sendToWorker<Settings>({ type: 'fillie:get-settings' });
+
+  test('reorders the AI platforms and keeps the order', async ({ fillie }) => {
     await openApp(fillie, '#/settings/ai');
+    expect((await settingsOf(fillie)).providerOrder[0]).toBe('gemini');
 
-    await fillie.control.selectOption('select[name="config.provider"]', 'openrouter');
+    await fillie.control.click('[data-action="move-provider"][data-id="gemini"][data-dir="1"]');
 
-    await expect
-      .poll(async () => {
-        const settings = await fillie.sendToWorker<{ config: { provider: string; baseUrl: string } }>({
-          type: 'fillie:get-settings',
-        });
-        return settings.config.provider;
-      }, { timeout: 15_000 })
-      .toBe('openrouter');
-
-    const settings = await fillie.sendToWorker<{ config: { baseUrl: string; model: string } }>({
-      type: 'fillie:get-settings',
-    });
-    // Switching preset fills in that provider's free-tier defaults.
-    expect(settings.config.baseUrl).toMatch(/openrouter\.ai/);
-    expect(settings.config.model).toMatch(/:free$/);
+    await expect.poll(async () => (await settingsOf(fillie)).providerOrder.slice(0, 2), { timeout: 15_000 }).toEqual(['cerebras', 'gemini']);
+    // The rows are drawn in the new order.
+    await expect(fillie.control.locator('.provider-row').first()).toHaveAttribute('data-provider', 'cerebras');
   });
 
   test('turns hosted AI off without breaking the offline engine', async ({ fillie }) => {
@@ -412,10 +412,7 @@ test.describe('settings tab', () => {
     await toggle.click();
 
     await expect
-      .poll(async () => {
-        const settings = await fillie.sendToWorker<{ enabled: boolean }>({ type: 'fillie:get-settings' });
-        return settings.enabled;
-      }, { timeout: 15_000 })
+      .poll(async () => (await settingsOf(fillie)).enabled, { timeout: 15_000 })
       .toBe(!before);
 
     // A form still fills with the hosted provider switched off.
@@ -433,12 +430,12 @@ test.describe('settings tab', () => {
     expect(await fillie.control.evaluate(() => localStorage.getItem('fillie:theme'))).toBe('dark');
   });
 
-  test('tests the provider connection against a local endpoint', async ({ fillie }) => {
+  test('tests a platform connection against a local endpoint', async ({ fillie }) => {
     await fillie.setAi({ enabled: true, scenario: 'valid' });
     await openApp(fillie, '#/settings/ai');
 
-    await fillie.control.click('[data-action="test-connection"]');
-    await expect(fillie.control.locator('body')).toContainText(/Connected to/i, { timeout: 20_000 });
+    await fillie.control.click(testButton('openai-compatible'));
+    await expect(fillie.control.locator(`${row('openai-compatible')} .provider-test`)).toContainText(/Connected to/i, { timeout: 20_000 });
   });
 
   test('saves every AI control the user can reach', async ({ fillie }) => {
@@ -448,53 +445,33 @@ test.describe('settings tab', () => {
     // Each control's stored value must change when the control does. A control
     // that renders but never saves is silently broken, so they are checked
     // together rather than one at a time.
-    const cases: Array<[string, string, unknown]> = [
-      ['input[name="config.temperature"]', '0.7', 0.7],
-      ['input[name="config.maxOutputTokens"]', '1200', 1200],
-      ['input[name="config.baseUrl"]', 'https://example.test/v1', 'https://example.test/v1'],
-      ['input[name="config.model"]', 'my-model', 'my-model'],
-      ['input[name="batchSize"]', '12', 12],
-      ['input[name="maxRetries"]', '3', 3],
+    const cases: Array<[string, string, (s: Settings) => unknown, unknown]> = [
+      ['input[name="config.temperature"]', '0.7', (s) => s.config.temperature, 0.7],
+      ['input[name="config.maxOutputTokens"]', '1200', (s) => s.config.maxOutputTokens, 1200],
+      ['input[name="batchSize"]', '12', (s) => s.batchSize, 12],
+      ['input[name="maxRetries"]', '3', (s) => s.maxRetries, 3],
+      ['input[name="model.cerebras"]', 'my-model', (s) => s.providerModels.cerebras, 'my-model'],
+      ['input[name="baseUrl.openai-compatible"]', 'https://example.test/v1', (s) => s.providerBaseUrls['openai-compatible'], 'https://example.test/v1'],
+      ['input[name="key.together"]', 'a-together-key', (s) => s.config.apiKeys?.together, 'a-together-key'],
     ];
 
-    for (const [selector, input, expected] of cases) {
+    for (const [selector, input, read, expected] of cases) {
       const field = fillie.control.locator(selector);
       await expect(field, selector).toBeVisible();
       await field.fill(String(input));
       await field.blur();
-
-      const key = selector.includes('config.') ? selector.split('"')[1].slice('config.'.length) : selector.split('"')[1];
-      await expect
-        .poll(
-          async () => {
-            const settings = await fillie.sendToWorker<Record<string, Record<string, unknown> & Record<string, unknown>>>(
-              { type: 'fillie:get-settings' },
-            );
-            return key in settings ? settings[key] : settings.config[key];
-          },
-          { timeout: 15_000 },
-        )
-        .toBe(expected);
+      await expect.poll(async () => read(await settingsOf(fillie)), { timeout: 15_000 }, ).toBe(expected);
     }
 
     // The confidence sliders commit as they move, without waiting for blur.
-    const slider = fillie.control.locator('input[name="autoFillThreshold"]');
-    await slider.fill('0.7');
+    await fillie.control.locator('input[name="autoFillThreshold"]').fill('0.7');
     await expect
-      .poll(async () => {
-        const settings = await fillie.sendToWorker<{ autoFillThreshold: number }>({ type: 'fillie:get-settings' });
-        return settings.autoFillThreshold;
-      }, { timeout: 15_000 })
+      .poll(async () => (await settingsOf(fillie)).autoFillThreshold as number, { timeout: 15_000 })
       .toBeCloseTo(0.7, 2);
 
     // Switching JSON mode off is honoured too.
     await fillie.control.locator('.ff-switch:has(input[name="config.jsonMode"])').click();
-    await expect
-      .poll(async () => {
-        const settings = await fillie.sendToWorker<{ config: { jsonMode: boolean } }>({ type: 'fillie:get-settings' });
-        return settings.config.jsonMode;
-      }, { timeout: 15_000 })
-      .toBe(false);
+    await expect.poll(async () => (await settingsOf(fillie)).config.jsonMode, { timeout: 15_000 }).toBe(false);
   });
 
   test('stores the timeout in milliseconds when the UI shows seconds', async ({ fillie }) => {
@@ -506,219 +483,124 @@ test.describe('settings tab', () => {
     await field.fill('45');
     await field.blur();
 
-    await expect
-      .poll(async () => {
-        const settings = await fillie.sendToWorker<{ config: { timeoutMs: number } }>({
-          type: 'fillie:get-settings',
-        });
-        return settings.config.timeoutMs;
-      }, { timeout: 15_000 })
-      .toBe(45_000);
+    await expect.poll(async () => (await settingsOf(fillie)).config.timeoutMs, { timeout: 15_000 }).toBe(45_000);
   });
 
   test('reports a failing connection instead of claiming success', async ({ fillie }) => {
     await fillie.setAi({ enabled: true, scenario: 'rate-limit' });
     await openApp(fillie, '#/settings/ai');
 
-    await fillie.control.click('[data-action="test-connection"]');
-    await expect(fillie.control.locator('body')).toContainText(/rate limit/i, { timeout: 20_000 });
+    await fillie.control.click(testButton('openai-compatible'));
+    await expect(fillie.control.locator(`${row('openai-compatible')} .provider-test`)).toContainText(/rate limit/i, { timeout: 20_000 });
   });
 
   /**
-   * The key field is the one control rendered as raw markup rather than through
-   * the shared `textField` helper, so it once missed the `data-bind` attribute
-   * that routes a keystroke into `config.apiKey`. The symptom was that Test
-   * connection always failed with Fillie's own "Add a Google AI Studio API key"
-   * message, because the provider was handed an empty key and refused locally
-   * before making any request.
+   * Each platform's key field is raw markup, so it once missed the `data-bind`
+   * attribute that routes a keystroke into settings. A typed key has to reach
+   * the provider, and the Test button has to wake up as soon as a key exists.
    */
-  test('saves a typed Gemini API key and passes it to the provider', async ({ fillie }) => {
+  test('saves a typed API key, enables Test, and passes the key to the provider', async ({ fillie }) => {
     await openApp(fillie, '#/settings/ai');
+    const id = 'openai-compatible';
 
-    // Switching to Gemini must fill in the model Google currently serves to new
-    // keys. `gemini-2.5-flash` is gated and answers 404 for a fresh key, which
-    // is the bug this guards.
-    await fillie.control.locator('select[name="config.provider"]').selectOption('gemini');
-    await expect(fillie.control.locator('input[name="config.model"]')).toHaveValue('gemini-3.5-flash-lite');
-    await expect(fillie.control.locator('input[name="config.baseUrl"]')).toHaveValue(
-      'https://generativelanguage.googleapis.com/v1beta',
-    );
-    await fillie.control.locator('input[name="config.baseUrl"]').fill(`${MOCK_AI}/valid/v1`);
+    // The fixture seeds a key; clear it to start from "no key".
+    await fillie.control.locator(`input[name="key.${id}"]`).fill('');
+    await expect(fillie.control.locator(testButton(id))).toBeDisabled();
 
-    const field = fillie.control.locator('#fld-apiKey');
-    await expect(field).toBeVisible();
+    await fillie.control.locator(`input[name="baseUrl.${id}"]`).fill(`${MOCK_AI}/valid/v1`);
+    await fillie.control.locator(`input[name="model.${id}"]`).fill('mock-model');
     // A fake key: it only ever travels to the local mock server.
-    await field.fill('typed-key-in-the-ui');
-    await field.blur();
+    await fillie.control.locator(`input[name="key.${id}"]`).fill('typed-key-in-the-ui');
+    await fillie.control.locator(`input[name="key.${id}"]`).blur();
 
-    // Persisted under config.apiKey — not a top-level `apiKey` that nothing reads.
-    await expect
-      .poll(
-        async () => {
-          const settings = await fillie.sendToWorker<{ config: { apiKey: string } }>({ type: 'fillie:get-settings' });
-          return settings.config.apiKey;
-        },
-        { timeout: 20_000 },
-      )
-      .toBe('typed-key-in-the-ui');
+    await expect.poll(async () => (await settingsOf(fillie)).config.apiKeys?.[id], { timeout: 20_000 }).toBe('typed-key-in-the-ui');
 
-    // And the request actually reaches the provider, so the user sees a real
-    // result from Google rather than Fillie's local "no key" error.
-    await fillie.control.click('[data-action="test-connection"]');
-    await expect(fillie.control.locator('body')).toContainText(/connected/i, { timeout: 20_000 });
-    await expect(fillie.control.locator('body')).not.toContainText(/add a google ai studio api key/i);
+    // Typing a key enables Test without a page reload.
+    await expect(fillie.control.locator(testButton(id))).toBeEnabled();
+    await fillie.control.click(testButton(id));
+    await expect(fillie.control.locator(`${row(id)} .provider-test`)).toContainText(/connected/i, { timeout: 20_000 });
 
     // The key survives a reload, so the user is not asked for it again.
     await openApp(fillie, '#/settings/ai');
-    await expect(fillie.control.locator('#fld-apiKey')).toHaveValue('typed-key-in-the-ui');
+    await expect(fillie.control.locator(`input[name="key.${id}"]`)).toHaveValue('typed-key-in-the-ui');
   });
 
-  /**
-   * A model Google has gated to legacy projects answers 404, which used to
-   * surface as a bare "unexpected response (404)" with nothing actionable. The
-   * 404 must still be an error — never hidden or swallowed — but it must not be
-   * presented as if the endpoint itself were wrong.
-   */
   test('shows a provider 404 as a failure rather than claiming success', async ({ fillie }) => {
     await fillie.setAi({ enabled: true, scenario: 'valid' });
-    const stored = await fillie.sendToWorker<{ config: Record<string, unknown> }>({ type: 'fillie:get-settings' });
-    await fillie.sendToWorker({
-      type: 'fillie:save-settings',
-      settings: { ...stored, config: { ...stored.config, provider: 'gemini', apiKey: 'a-key' } },
-    });
     await openApp(fillie, '#/settings/ai');
 
-    // An unroutable base URL makes the mock 404, exactly as Google's gateway does
-    // for a gated model.
-    await fillie.control.locator('input[name="config.baseUrl"]').fill(`${MOCK_AI}/no-such-scenario/v1`);
-    await fillie.control.locator('input[name="config.baseUrl"]').blur();
-    await fillie.control.click('[data-action="test-connection"]');
+    // An unroutable base URL makes the mock 404, exactly as a gateway does for a gated model.
+    const url = fillie.control.locator('input[name="baseUrl.openai-compatible"]');
+    await url.fill(`${MOCK_AI}/no-such-scenario/v1`);
+    await url.blur();
+    await fillie.control.click(testButton('openai-compatible'));
 
-    await expect(fillie.control.locator('body')).toContainText(/connection failed/i, { timeout: 20_000 });
-    await expect(fillie.control.locator('body')).not.toContainText(/connection works/i);
+    const result = fillie.control.locator(`${row('openai-compatible')} .provider-test`);
+    await expect(result).toHaveAttribute('data-ok', 'false', { timeout: 20_000 });
+    // The provider's own words, not just a status code, so the cause is visible.
+    await expect(result).toContainText(/no-such-scenario|not found/i);
+    await expect(fillie.control.locator('body')).not.toContainText(/connected to/i);
   });
 
   /**
    * Settings persist in chrome.storage.local, so a browser that saved the old
    * Gemini preset kept naming the gated `gemini-2.5-flash` after the preset was
-   * corrected. It kept returning 404 with nothing pointing at the cause. The
-   * saved model has to be migrated on read, not only changed in the preset.
+   * corrected. The saved model has to be migrated on read.
    */
   test('migrates a stored Gemini model that is closed to new API keys', async ({ fillie }) => {
-    const stored = await fillie.sendToWorker<{ config: Record<string, unknown> }>({ type: 'fillie:get-settings' });
+    const stored = await settingsOf(fillie);
     await fillie.sendToWorker({
       type: 'fillie:save-settings',
       settings: {
         ...stored,
-        config: {
-          ...stored.config,
-          provider: 'gemini',
-          model: 'gemini-2.5-flash',
-          baseUrl: 'https://generativelanguage.googleapis.com/v1beta',
-          apiKey: 'a-key-from-before-the-fix',
-        },
+        config: { ...stored.config, provider: 'gemini', model: 'gemini-2.5-flash', apiKey: 'a-key-from-before-the-fix' },
+        providerModels: { ...stored.providerModels, gemini: 'gemini-2.5-flash' },
       },
     });
 
     await openApp(fillie, '#/settings/ai');
 
-    // The field shows the migrated model, not the gated one that was saved.
-    await expect(fillie.control.locator('input[name="config.model"]')).toHaveValue('gemini-3.5-flash-lite');
-
+    await expect(fillie.control.locator('input[name="model.gemini"]')).toHaveValue('gemini-3.5-flash-lite');
     // The user's key is untouched by the migration.
-    await expect(fillie.control.locator('#fld-apiKey')).toHaveValue('a-key-from-before-the-fix');
-    // And the request that gets built now names a model that is available.
-    const url = await fillie.control.evaluate(() => {
-      const base = (document.querySelector('input[name="config.baseUrl"]') as HTMLInputElement).value;
-      const model = (document.querySelector('input[name="config.model"]') as HTMLInputElement).value;
-      return `${base.replace(/\/+$/, '')}/models/${encodeURIComponent(model)}:generateContent`;
-    });
-    expect(url).toBe(
-      'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent',
-    );
+    await expect(fillie.control.locator('input[name="key.gemini"]')).toHaveValue('a-key-from-before-the-fix');
   });
 
-  /**
- * The reason every provider appeared broken: a Gemini model left in the Groq
- * field made Groq answer 404, and the generic wording hid that. The stored
- * cross-provider mismatch has to be repaired on read, and the provider's own
- * explanation has to reach the screen.
- */
+  /** A Gemini model left in the Groq field made Groq answer 404 and hid the cause. */
   test('repairs a model left over from another provider', async ({ fillie }) => {
-    const stored = await fillie.sendToWorker<{ config: Record<string, unknown> }>({ type: 'fillie:get-settings' });
+    const stored = await settingsOf(fillie);
     await fillie.sendToWorker({
       type: 'fillie:save-settings',
       settings: {
         ...stored,
-        config: {
-          ...stored.config,
-          provider: 'groq',
-          baseUrl: 'https://api.groq.com/openai/v1',
-          model: 'gemini-3.5-flash-lite',
-          apiKey: 'a-groq-key',
-        },
+        config: { ...stored.config, provider: 'groq', model: 'gemini-3.5-flash-lite', apiKey: 'a-groq-key' },
+        providerModels: { ...stored.providerModels, groq: 'gemini-3.5-flash-lite' },
       },
     });
 
     await openApp(fillie, '#/settings/ai');
 
-    // Groq is selected, so a Gemini model in the field cannot be what Groq serves.
-    await expect(fillie.control.locator('input[name="config.model"]')).toHaveValue('openai/gpt-oss-20b');
-    // The user's key is untouched.
-    await expect(fillie.control.locator('#fld-apiKey')).toHaveValue('a-groq-key');
-  });
-
-  test('names the provider and its reason when a connection fails', async ({ fillie }) => {
-    await fillie.setAi({ enabled: true, scenario: 'valid' });
-    await openApp(fillie, '#/settings/ai');
-
-    // The mock answers 404 for an unknown scenario, exactly as a provider does for
-    // an unknown model or path.
-    await fillie.control.locator('input[name="config.baseUrl"]').fill(`${MOCK_AI}/no-such-scenario/v1`);
-    await fillie.control.locator('input[name="config.baseUrl"]').blur();
-    await fillie.control.click('[data-action="test-connection"]');
-
-    const banner = fillie.control.locator('.banner[data-tone="danger"]');
-    await expect(banner).toContainText(/connection failed/i, { timeout: 20_000 });
-    // The provider's own words, not just a status code, so the cause is visible.
-    await expect(banner).toContainText(/no-such-scenario|not found/i);
-    await expect(fillie.control.locator('body')).not.toContainText(/connection works/i);
+    await expect(fillie.control.locator('input[name="model.groq"]')).toHaveValue('openai/gpt-oss-20b');
+    await expect(fillie.control.locator('input[name="key.groq"]')).toHaveValue('a-groq-key');
   });
 
   /**
- * A reasoning model (everything Groq still hosts) emits its chain of thought
- * before the answer. The probe used to allow so few tokens that the reasoning
- * consumed the whole budget, leaving no answer — reported as a broken
- * connection when the provider was working fine.
- */
+   * A reasoning model (everything Groq still hosts) emits its chain of thought
+   * before the answer. The probe budget has to survive that.
+   */
   test('a reasoning model is not reported as a broken connection', async ({ fillie }) => {
-    // Point the OpenAI-compatible adapter at the local mock; Groq's preset is a
-    // reasoning model, and the probe budget has to survive its reasoning.
     await fillie.setAi({ enabled: true, scenario: 'valid', provider: 'groq' });
     await openApp(fillie, '#/settings/ai');
 
-    await expect(fillie.control.locator('select[name="config.provider"]')).toHaveValue('groq');
-    await fillie.control.click('[data-action="test-connection"]');
-    await expect(fillie.control.locator('body')).toContainText(/connected/i, { timeout: 20_000 });
-    await expect(fillie.control.locator('body')).not.toContainText(/connection failed/i);
+    await fillie.control.click(testButton('groq'));
+    const result = fillie.control.locator(`${row('groq')} .provider-test`);
+    await expect(result).toContainText(/connected/i, { timeout: 20_000 });
+    await expect(result).toHaveAttribute('data-ok', 'true');
   });
 
-  test('still reports a missing API key when the field is left empty', async ({ fillie }) => {
-    await fillie.setAi({ enabled: true, scenario: 'valid' });
-    // `setAi` only overrides a key when given a non-empty one, so the stored key
-    // is cleared explicitly to reach the genuinely-unconfigured path.
-    const stored = await fillie.sendToWorker<{ config: Record<string, unknown> }>({ type: 'fillie:get-settings' });
-    await fillie.sendToWorker({
-      type: 'fillie:save-settings',
-      settings: { ...stored, config: { ...stored.config, provider: 'gemini', apiKey: '' } },
-    });
+  test('cannot test a platform until a key is added', async ({ fillie }) => {
     await openApp(fillie, '#/settings/ai');
-
-    await fillie.control.locator('select[name="config.provider"]').selectOption('gemini');
-    await expect(fillie.control.locator('#fld-apiKey')).toBeVisible();
-
-    await fillie.control.click('[data-action="test-connection"]');
-    await expect(fillie.control.locator('body')).toContainText(/add a google ai studio api key/i, { timeout: 20_000 });
+    await expect(fillie.control.locator(`${row('gemini')} .ff-chip`)).toHaveText('No key');
+    await expect(fillie.control.locator(testButton('gemini'))).toBeDisabled();
   });
 });
 
