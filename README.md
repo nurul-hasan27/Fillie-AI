@@ -6,7 +6,7 @@
 
 A free, open-source Chrome extension that fills job applications and forms from your profile and resume.
 
-[Website](https://YOUR-SITE.vercel.app) · [Download](../../releases) · [Support](https://YOUR-SITE.vercel.app/#donate)
+[Website](https://fillie-website.vercel.app) · [Download Fillie](https://github.com/nurul-hasan27/Fillie-AI/releases/download/v1.0.0/fillie-extension.zip) · [Support](https://fillie-website.vercel.app/#donate)
 
 </div>
 
