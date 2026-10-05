@@ -1,4 +1,5 @@
-import type { StatusResponse } from '../shared/messages';
+import type { AccountStatus, StatusResponse } from '../shared/messages';
+import { computeHashes } from '../core/cloud/fingerprint';
 import { sendMessage, type ContentPingResponse } from '../shared/messages';
 import { escapeHtml, html, preferredTheme, setTheme, type TemplateResult } from '../ui/dom';
 import { icon } from '../ui/icons';
@@ -107,7 +108,9 @@ function render(state: {
           <span class="ff-status-dot"></span>
           ${status.aiConfigured ? `Ready · ${escapeHtml(provider?.label ?? 'AI')}` : 'Profile only'}
         </span>
-        <span class="ff-meta">${status.profileCompleteness}% profile</span>
+        ${status.access
+          ? html`<span class="pop-plan" data-plan="${status.access.plan}">${status.access.plan === 'paid' ? 'Unlocked' : `${status.access.remaining} free left`}</span>`
+          : html`<span class="ff-meta">${status.profileCompleteness}% profile</span>`}
       </div>
 
       <button class="pop-cta" data-action="run" type="button" ${state.pageOk ? '' : 'disabled'}>
@@ -147,6 +150,9 @@ function render(state: {
                 <div class="pop-actions">
                   <button class="ff-btn ff-btn-secondary ff-btn-sm" data-action="open-profile" type="button">
                     <span data-icon="user"></span> Profile
+                  </button>
+                  <button class="ff-btn ff-btn-secondary ff-btn-sm" data-action="open-database" type="button">
+                    <span data-icon="layers"></span> Database
                   </button>
                   <button class="ff-btn ff-btn-secondary ff-btn-sm" data-action="open-memory" type="button">
                     <span data-icon="brain"></span> Memory
@@ -193,7 +199,14 @@ function paint(next: Parameters<typeof render>[0]): void {
 }
 
 async function loadStatus(): Promise<StatusResponse> {
-  return sendMessage<StatusResponse>({ type: 'fillie:get-status' });
+  const status = await sendMessage<StatusResponse>({ type: 'fillie:get-status' });
+  try {
+    const account = await sendMessage<AccountStatus>({ type: 'fillie:account-status', device: await computeHashes() });
+    if (account.cloudConfigured) status.access = account.access;
+  } catch {
+    /* the plan chip is optional */
+  }
+  return status;
 }
 
 async function activeTab(): Promise<TabInfo | undefined> {
@@ -251,6 +264,7 @@ app.addEventListener('click', async (event) => {
   if (action === 'open-app') return void openApp();
   if (action === 'open-profile') return void openApp('#/profile/personal');
   if (action === 'open-memory') return void openApp('#/memory');
+  if (action === 'open-database') return void openApp('#/database');
   if (action === 'open-settings') return void openApp('#/settings/ai');
   if (action === 'run') {
     const tab = await activeTab();

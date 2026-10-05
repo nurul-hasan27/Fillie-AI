@@ -30,6 +30,13 @@ import {
 } from './views/profile';
 import { memoryEditor, memoryView } from './views/memory';
 import { resumeView } from './views/resume';
+import { applicationEditor, databaseView, type DatabaseState } from './views/database';
+import { accountView, type AccountState } from './views/account';
+import { computeHashes } from '../core/cloud/fingerprint';
+import { newApplication } from '../core/cloud/applications';
+import type { Application, ApplicationStatus, OAuthProvider } from '../core/cloud/types';
+import type { AccountStatus } from '../shared/messages';
+import type { ApplicationPage } from '../core/cloud/applications';
 import {
   SETTINGS_SECTIONS,
   aiView,
@@ -50,6 +57,8 @@ type Route =
   | { kind: 'profile'; section: ProfileSection }
   | { kind: 'memory'; editing?: string }
   | { kind: 'resume' }
+  | { kind: 'database' }
+  | { kind: 'account' }
   | { kind: 'settings'; section: SettingsSection };
 
 interface AppState {
@@ -61,6 +70,9 @@ interface AppState {
   memory: LearnedAnswer[];
   resumes: ResumesState;
   activeResumeId: string;
+  db: DatabaseState;
+  editingApp?: { app: Application; isNew: boolean };
+  account: AccountState;
   memoryQuery: string;
   theme: 'light' | 'dark' | 'system';
   importedFile?: string;
@@ -92,6 +104,8 @@ const state: AppState = {
   memory: [],
   resumes: { resumes: [], defaultId: '' },
   activeResumeId: '',
+  db: { rows: [], hasMore: false, loading: false, loaded: false, localOnly: false, signedIn: false, search: '', status: 'all' },
+  account: { status: null, mode: 'signin', busy: '' },
   memoryQuery: '',
   theme: (localStorage.getItem('fillie:theme') as AppState['theme']) ?? 'system',
   importWarnings: [],
@@ -112,6 +126,8 @@ function parseRoute(): Route {
 
   if (head === 'memory') return { kind: 'memory' };
   if (head === 'resume') return { kind: 'resume' };
+  if (head === 'database') return { kind: 'database' };
+  if (head === 'account') return { kind: 'account' };
 
   if (head === 'settings') {
     const valid = SETTINGS_SECTIONS.some((entry) => entry.id === section);
@@ -185,6 +201,8 @@ function pageTitleFor(route: Route): { title: string; description: string } {
     const section = PROFILE_SECTIONS.find((entry) => entry.id === route.section) ?? PROFILE_SECTIONS[0];
     return { title: section.label, description: section.description };
   }
+  if (route.kind === 'database') return { title: 'Database', description: 'Every application, with status, notes and rating.' };
+  if (route.kind === 'account') return { title: 'Account', description: 'Plan, sign-in and backup.' };
   if (route.kind === 'resume') {
     return { title: 'Resumes', description: 'One per kind of role. Fillie asks which to use.' };
   }
@@ -222,8 +240,10 @@ function sidebar(): TemplateResult {
 
       <nav class="side-group" aria-label="Other sections">
         <span class="ff-label side-group-label">Fillie</span>
+        ${link('#/database', 'Database', 'layers', state.route.kind === 'database')}
         ${link('#/resume', 'Resumes', 'upload', state.route.kind === 'resume')}
         ${link('#/memory', 'Memory', 'brain', state.route.kind === 'memory')}
+        ${link('#/account', 'Account', 'user', state.route.kind === 'account')}
         ${SETTINGS_SECTIONS.map((section) =>
           link(`#/settings/${section.id}`, section.label, 'sliders', state.route.kind === 'settings' && state.route.section === section.id),
         )}
@@ -305,6 +325,10 @@ function body(): TemplateResult {
     return view(state.profile);
   }
 
+  if (state.route.kind === 'database') {
+    return html`${databaseView(state.db)}${state.editingApp ? applicationEditor(state.editingApp.app, state.editingApp.isNew) : ''}`;
+  }
+  if (state.route.kind === 'account') return accountView(state.account);
   if (state.route.kind === 'resume') return resumeView(state.resumes, state.activeResumeId);
 
   if (state.route.kind === 'memory') {
@@ -343,6 +367,8 @@ function render(): void {
   app.innerHTML = page.__html;
   hydrate(app);
   renderImportPreview();
+  if (state.editingApp) syncEditor();
+  watchLoadMore();
   const search = app.querySelector<HTMLInputElement>('#memory-search');
   if (search) {
     search.addEventListener('input', () => {
@@ -631,6 +657,17 @@ app.addEventListener('input', (event) => {
   }
 
   if (!(target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement)) return;
+  if (target.id === 'db-search') {
+    state.db.search = (target as HTMLInputElement).value;
+    if (dbSearchTimer) clearTimeout(dbSearchTimer);
+    dbSearchTimer = setTimeout(async () => {
+      await loadApps(true);
+      const next = app.querySelector<HTMLInputElement>('#db-search');
+      next?.focus();
+      next?.setSelectionRange(next.value.length, next.value.length);
+    }, 300);
+    return;
+  }
   if (target.id === 'resume-text' || target.id === 'resume-name') {
     const active = activeResume();
     if (!active) return;
@@ -1007,6 +1044,101 @@ app.addEventListener('click', async (event) => {
       render();
       return;
 
+    case 'add-app':
+      state.editingApp = { app: newApplication({ company: '', role: '' }), isNew: true };
+      render();
+      app.querySelector<HTMLInputElement>('#af-company')?.focus();
+      return;
+    case 'edit-app': {
+      const found = state.db.rows.find((row) => row.id === target.getAttribute('data-id'));
+      if (found) {
+        state.editingApp = { app: found, isNew: false };
+        render();
+      }
+      return;
+    }
+    case 'close-editor':
+      // A click inside the dialog bubbles here too; only the backdrop or Cancel closes it.
+      if (target.classList.contains('modal-backdrop') && rawTarget.closest('.modal')) return;
+      state.editingApp = undefined;
+      render();
+      return;
+    case 'clear-rating': {
+      app.querySelectorAll<HTMLInputElement>('#app-form input[name="rating"]').forEach((input) => (input.checked = false));
+      syncEditor();
+      return;
+    }
+    case 'delete-app': {
+      const id = target.getAttribute('data-id') ?? '';
+      if (!confirm('Delete this application?')) return;
+      await sendMessage({ type: 'fillie:apps-delete', id });
+      state.db.rows = state.db.rows.filter((row) => row.id !== id);
+      render();
+      return;
+    }
+    case 'rate-app': {
+      const id = target.getAttribute('data-id') ?? '';
+      const value = Number(target.getAttribute('data-value'));
+      const row = state.db.rows.find((entry) => entry.id === id);
+      if (!row) return;
+      // Tapping the current rating clears it; the user always has the last word.
+      const rating = row.rating === value ? null : value;
+      const saved = await sendMessage<Application>({
+        type: 'fillie:apps-save',
+        app: { ...row, rating, ratingSource: rating ? 'user' : null },
+      });
+      state.db.rows = state.db.rows.map((entry) => (entry.id === id ? saved : entry));
+      render();
+      return;
+    }
+    case 'filter-status':
+      state.db.status = (target.getAttribute('data-status') as ApplicationStatus | 'all') ?? 'all';
+      void loadApps(true);
+      return;
+    case 'load-more':
+      void loadApps(false);
+      return;
+    case 'toggle-auth':
+      state.account.mode = state.account.mode === 'signin' ? 'signup' : 'signin';
+      render();
+      return;
+    case 'oauth':
+      await runAuth('oauth', () => sendMessage({ type: 'fillie:sign-in-oauth', provider: target.getAttribute('data-provider') as OAuthProvider }));
+      return;
+    case 'sign-out':
+      await sendMessage({ type: 'fillie:sign-out' });
+      state.account.status = null;
+      state.db = { ...state.db, rows: [], loaded: false, signedIn: false };
+      await loadAccount();
+      return;
+    case 'checkout': {
+      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:checkout' });
+      if (!result.ok) toast(result.error ?? 'Could not start checkout.', 'danger');
+      return;
+    }
+    case 'refresh-payment':
+      state.account.status = await sendMessage<AccountStatus>({ type: 'fillie:refresh-payment', device: await computeHashes() });
+      render();
+      toast(state.account.status.access.plan === 'paid' ? 'Payment confirmed. Fillie is unlocked!' : 'No payment found yet. It can take a minute.');
+      return;
+    case 'backup-now': {
+      const result = await sendMessage<{ ok: boolean; reason?: string }>({ type: 'fillie:backup-now' });
+      toast(result.ok ? 'Backed up' : (result.reason ?? 'Backup failed'), result.ok ? 'default' : 'danger');
+      await loadAccount();
+      return;
+    }
+    case 'restore-now': {
+      if (!confirm('Replace the data on this device with your last backup?')) return;
+      const result = await sendMessage<{ ok: boolean; reason?: string }>({ type: 'fillie:restore-now' });
+      if (result.ok) {
+        state.profile = await loadProfile();
+        state.store.set(state.profile);
+        await Promise.all([refreshMemory(), refreshResumes(), refreshSettings()]);
+        render();
+      }
+      toast(result.ok ? 'Restored from backup' : (result.reason ?? 'Could not restore'), result.ok ? 'default' : 'danger');
+      return;
+    }
     case 'select-resume':
       state.activeResumeId = target.getAttribute('data-id') ?? '';
       render();
@@ -1566,6 +1698,162 @@ function summariseSuggestion(section: string, value: unknown): string {
   }
 }
 
+
+/* ------------------------------------------------------------------ */
+/* Database + account                                                  */
+/* ------------------------------------------------------------------ */
+
+let dbObserver: IntersectionObserver | null = null;
+let dbSearchTimer: ReturnType<typeof setTimeout> | null = null;
+let dbRequest = 0;
+
+/** Loads one page (100 rows) of applications; `reset` starts again from the top. */
+async function loadApps(reset: boolean): Promise<void> {
+  const db = state.db;
+  if (db.loading) return;
+  db.loading = true;
+  db.error = undefined;
+  const ticket = (dbRequest += 1);
+  if (reset) {
+    db.rows = [];
+    db.loaded = false;
+  }
+  render();
+  try {
+    const page = await sendMessage<ApplicationPage>({
+      type: 'fillie:apps-list',
+      query: { offset: reset ? 0 : db.rows.length, search: db.search, status: db.status },
+    });
+    if (ticket !== dbRequest) return; // a newer search superseded this one
+    db.rows = reset ? page.rows : [...db.rows, ...page.rows];
+    db.hasMore = page.hasMore;
+    db.localOnly = page.localOnly;
+  } catch (error) {
+    db.error = error instanceof Error ? error.message : 'Please try again.';
+  } finally {
+    if (ticket === dbRequest) {
+      db.loading = false;
+      db.loaded = true;
+      render();
+    }
+  }
+}
+
+/** Fetches the next page when the "Load more" button scrolls into view. */
+function watchLoadMore(): void {
+  dbObserver?.disconnect();
+  const button = app.querySelector('#db-more');
+  if (!button || !('IntersectionObserver' in window)) return;
+  dbObserver = new IntersectionObserver((entries) => {
+    if (entries.some((entry) => entry.isIntersecting) && state.db.hasMore && !state.db.loading) void loadApps(false);
+  }, { rootMargin: '240px' });
+  dbObserver.observe(button);
+}
+
+async function loadAccount(): Promise<void> {
+  try {
+    state.account.status = await sendMessage<AccountStatus>({ type: 'fillie:account-status', device: await computeHashes() });
+    state.db.signedIn = state.account.status.access.signedIn;
+  } catch {
+    state.account.message = { tone: 'danger', text: 'Could not load your account.' };
+  }
+  render();
+}
+
+function applyRouteData(): void {
+  if (state.route.kind === 'database') {
+    if (!state.db.loaded && !state.db.loading) void loadApps(true);
+    if (state.account.status === null) void loadAccount();
+    watchLoadMore();
+  } else if (state.route.kind === 'account' && !state.account.status) {
+    void loadAccount();
+  }
+}
+
+function readEditor(form: HTMLFormElement, base: Application): Application {
+  const data = new FormData(form);
+  const status = (data.get('status') as ApplicationStatus) || base.status;
+  const rating = Number(data.get('rating')) || null;
+  const lpa = String(data.get('offerLpa') ?? '').trim();
+  return {
+    ...base,
+    company: String(data.get('company') ?? '').trim(),
+    role: String(data.get('role') ?? '').trim(),
+    status,
+    interviewAt: String(data.get('interviewAt') ?? '') || null,
+    offerLpa: lpa === '' ? null : Number(lpa),
+    appliedAt: String(data.get('appliedAt') ?? '') || base.appliedAt,
+    notes: String(data.get('notes') ?? '').split('\n'),
+    rating,
+    // A rating the user touched is theirs from then on.
+    ratingSource: rating ? (rating === base.rating ? base.ratingSource : 'user') : null,
+  };
+}
+
+/** Shows only the fields that apply to the chosen status, and highlights it. */
+function syncEditor(): void {
+  const form = app.querySelector<HTMLFormElement>('#app-form');
+  if (!form) return;
+  const status = (new FormData(form).get('status') as string) || 'applied';
+  form.querySelectorAll<HTMLElement>('[data-only]').forEach((node) => {
+    node.hidden = node.getAttribute('data-only') !== status;
+  });
+  form.querySelectorAll<HTMLElement>('label.tag').forEach((label) => {
+    label.classList.toggle('is-on', Boolean(label.querySelector<HTMLInputElement>('input')?.checked));
+  });
+  const rating = Number(new FormData(form).get('rating')) || 0;
+  form.querySelectorAll<HTMLElement>('.rating-edit .star').forEach((star, index) => star.setAttribute('data-on', String(index < rating)));
+}
+
+app.addEventListener('change', (event) => {
+  if ((event.target as HTMLElement).closest('#app-form')) syncEditor();
+});
+
+app.addEventListener('submit', async (event) => {
+  const form = event.target as HTMLFormElement;
+  if (form.id === 'app-form' && state.editingApp) {
+    event.preventDefault();
+    const app = readEditor(form, state.editingApp.app);
+    if (!app.company || !app.role) return;
+    const saved = await sendMessage<Application>({ type: 'fillie:apps-save', app });
+    const rows = state.db.rows.filter((row) => row.id !== saved.id);
+    state.db.rows = [saved, ...rows].sort((a, b) => b.appliedAt.localeCompare(a.appliedAt));
+    state.editingApp = undefined;
+    render();
+    toast('Saved');
+    return;
+  }
+  if (form.id === 'auth-form') {
+    event.preventDefault();
+    const email = (form.querySelector('#auth-email') as HTMLInputElement).value;
+    const password = (form.querySelector('#auth-password') as HTMLInputElement).value;
+    await runAuth('password', () => sendMessage({ type: 'fillie:sign-in', mode: state.account.mode, email, password }));
+  }
+});
+
+async function runAuth(busy: string, call: () => Promise<unknown>): Promise<void> {
+  state.account.busy = busy;
+  state.account.message = undefined;
+  render();
+  try {
+    const result = (await call()) as { ok: boolean; error?: string; confirm?: boolean };
+    if (!result.ok) state.account.message = { tone: 'danger', text: result.error ?? 'Sign-in failed.' };
+    else if (result.confirm) state.account.message = { tone: 'info', text: 'Check your email and confirm your address, then sign in.' };
+    else toast('Signed in');
+  } catch (error) {
+    state.account.message = { tone: 'danger', text: error instanceof Error ? error.message : 'Sign-in failed.' };
+  }
+  state.account.busy = '';
+  state.account.status = null;
+  state.db.loaded = false;
+  await loadAccount();
+  // Signing in changes what the Database shows (cloud rows) and what is backed up.
+  await Promise.all([refreshMemory(), refreshResumes()]);
+  state.profile = await loadProfile();
+  state.store.set(state.profile);
+  render();
+}
+
 /* ------------------------------------------------------------------ */
 /* Boot                                                                */
 /* ------------------------------------------------------------------ */
@@ -1577,6 +1865,7 @@ window.addEventListener('hashchange', () => {
     void refreshDiagnostics().then(render);
   }
   render();
+  applyRouteData();
   window.scrollTo({ top: 0 });
 });
 
@@ -1591,6 +1880,7 @@ async function boot(): Promise<void> {
   state.store.set(state.profile);
   await Promise.all([refreshSettings(), refreshMemory(), refreshDiagnostics(), refreshResumes()]);
   render();
+  applyRouteData();
 }
 
 void boot();

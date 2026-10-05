@@ -14,6 +14,13 @@ import {
 } from '../core/types';
 import { storage, STORAGE_KEYS } from '../core/storage';
 import { rankResumes } from '../core/resume-select';
+import { CloudClient, CloudError } from '../core/cloud/client';
+import { AccessService } from '../core/cloud/access';
+import { ApplicationStore } from '../core/cloud/applications';
+import { BackupService } from '../core/cloud/backup';
+import { CLOUD, isCloudConfigured } from '../core/cloud/config';
+import type { DeviceSignals, OAuthProvider } from '../core/cloud/types';
+import { suggestIntel } from '../core/engine/intel';
 import { createProvider } from '../core/ai/factory';
 import { buildProviderChain, FailoverProvider } from '../core/ai/chain';
 import { getPreset } from '../core/ai/presets';
@@ -29,6 +36,9 @@ import type {
   GenerateResponse,
   PlanRequest,
   PlanResponse,
+  AccountStatus,
+  ApplicationsRequest,
+  DeviceHashes,
   RememberBatchRequest,
   RememberRequest,
   ResumeSuggestion,
@@ -191,6 +201,8 @@ function uniqueServed(served: ServedBy[]): ServedBy[] {
 /* ------------------------------------------------------------------ */
 
 async function handlePlan(payload: PlanRequest): Promise<PlanResponse> {
+  // A cleared browser profile is repaired from the cloud backup on the next filling.
+  await backups.restoreIfEmpty().catch(() => false);
   const settings = await getSettings();
   const profile = await storage.getProfile();
   const memory = await storage.getMemory();
@@ -453,6 +465,140 @@ async function handleTestConnection(config?: AIProviderConfig): Promise<{ ok: bo
   }
 }
 
+/* ------------------------------------------------------------------ */
+/* Account, access, tracker, backup                                    */
+/* ------------------------------------------------------------------ */
+
+const cloud = new CloudClient(storage);
+const access = new AccessService(storage, cloud);
+const applications = new ApplicationStore(storage, cloud);
+const backups = new BackupService(storage, cloud);
+
+const INSTALL_KEY = 'fillie:install-id';
+const BACKUP_AT_KEY = 'fillie:last-backup';
+
+async function deviceSignals(hashes: DeviceHashes): Promise<DeviceSignals> {
+  let install = await storage.read<string>(INSTALL_KEY);
+  if (!install) {
+    install = crypto.randomUUID();
+    await storage.put(INSTALL_KEY, install);
+  }
+  return { install, hw: hashes.hw, br: hashes.br };
+}
+
+async function handleAccountStatus(device: DeviceHashes): Promise<AccountStatus> {
+  return {
+    cloudConfigured: isCloudConfigured(),
+    access: await access.status(await deviceSignals(device)),
+    pendingApplications: await applications.pendingCount(),
+    priceLabel: CLOUD.priceLabel,
+    lastBackupAt: await storage.read<number>(BACKUP_AT_KEY),
+  };
+}
+
+function authError(error: unknown): { ok: false; error: string } {
+  return { ok: false, error: error instanceof CloudError ? error.message : 'Something went wrong. Please try again.' };
+}
+
+async function afterSignIn(): Promise<void> {
+  // Bring this device and the cloud in line: upload waiting rows, restore if empty.
+  await applications.flush();
+  await backups.restoreIfEmpty();
+  const uploaded = await backups.upload();
+  if (uploaded.ok) await storage.put(BACKUP_AT_KEY, Date.now());
+}
+
+async function handleSignIn(message: Extract<BackgroundMessage, { type: 'fillie:sign-in' }>) {
+  try {
+    if (message.mode === 'signup') {
+      const session = await cloud.signUp(message.email.trim(), message.password);
+      if (!session) return { ok: true, confirm: true };
+    } else {
+      await cloud.signInWithPassword(message.email.trim(), message.password);
+    }
+    await afterSignIn();
+    return { ok: true };
+  } catch (error) {
+    return authError(error);
+  }
+}
+
+async function handleOAuth(provider: OAuthProvider) {
+  const identity = (globalThis as { chrome?: typeof chrome }).chrome?.identity;
+  if (!identity) return { ok: false, error: 'Sign-in is not available here.' };
+  try {
+    const redirectTo = identity.getRedirectURL();
+    const redirected = await identity.launchWebAuthFlow({ url: cloud.oauthUrl(provider, redirectTo), interactive: true });
+    if (!redirected) return { ok: false, error: 'Sign-in was cancelled.' };
+    await cloud.completeOAuth(redirected, provider);
+    await afterSignIn();
+    return { ok: true };
+  } catch (error) {
+    return authError(error);
+  }
+}
+
+async function handleCheckout() {
+  try {
+    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: '{}' });
+    await (globalThis as { chrome?: typeof chrome }).chrome?.tabs?.create({ url });
+    return { ok: true, url };
+  } catch (error) {
+    return authError(error);
+  }
+}
+
+async function handleBackupNow() {
+  const result = await backups.upload();
+  if (result.ok) await storage.put(BACKUP_AT_KEY, Date.now());
+  return result;
+}
+
+async function handleRestoreNow() {
+  try {
+    const backup = await backups.fetch();
+    if (!backup) return { ok: false, reason: 'No backup found yet.' };
+    await backups.apply(backup);
+    return { ok: true };
+  } catch (error) {
+    return { ok: false, reason: error instanceof CloudError ? error.message : 'Could not restore.' };
+  }
+}
+
+/**
+ * Records a submitted application once. Notes come from the posting and, when an
+ * AI platform is configured, a short AI summary; a rating is only an AI guess
+ * and stays editable.
+ */
+async function handleTrack(context: ApplicationContext) {
+  const company = context.company?.trim() || context.host;
+  const role = context.role?.trim() || context.pageTitle.slice(0, 120) || 'Application';
+  const settings = await getSettings();
+  const deps = await plannerDeps(settings);
+  const { app, created } = await applications.track(
+    { company, role, url: context.url, host: context.host },
+    async () => {
+      const intel = await suggestIntel(context, deps.send);
+      return { notes: intel.notes, rating: intel.rating, ratingSource: intel.rating ? 'ai' : null };
+    },
+  );
+  return { ok: true, created, app };
+}
+
+let backupTimer: ReturnType<typeof setTimeout> | null = null;
+/** Debounced upload after the user's data changes. Only runs when signed in. */
+function scheduleBackup(): void {
+  if (backupTimer) clearTimeout(backupTimer);
+  backupTimer = setTimeout(() => {
+    void backups
+      .upload()
+      .then(async (r) => {
+        if (r.ok) await storage.put(BACKUP_AT_KEY, Date.now());
+      })
+      .catch(() => undefined);
+  }, 20_000);
+}
+
 async function dispatch(message: BackgroundMessage): Promise<unknown> {
   switch (message.type) {
     case 'fillie:get-status':
@@ -484,6 +630,42 @@ async function dispatch(message: BackgroundMessage): Promise<unknown> {
       return handleSuggestResume(message.context);
     case 'fillie:remember-batch':
       return handleRememberBatch(message.payload);
+    case 'fillie:account-status':
+      return handleAccountStatus(message.device);
+    case 'fillie:begin-run':
+      return access.begin(await deviceSignals(message.device), message.url);
+    case 'fillie:sign-in':
+      return handleSignIn(message);
+    case 'fillie:sign-in-oauth':
+      return handleOAuth(message.provider);
+    case 'fillie:sign-out':
+      await cloud.signOut();
+      return { ok: true };
+    case 'fillie:checkout':
+      return handleCheckout();
+    case 'fillie:open-account': {
+      const api = (globalThis as { chrome?: typeof chrome }).chrome;
+      await api?.tabs?.create({ url: api.runtime.getURL('pages/app.html#/account') });
+      return { ok: true };
+    }
+    case 'fillie:refresh-payment': {
+      const session = await cloud.getSession();
+      if (session) await access.isPaid(session.user.id, { force: true });
+      return handleAccountStatus(message.device);
+    }
+    case 'fillie:backup-now':
+      return handleBackupNow();
+    case 'fillie:restore-now':
+      return handleRestoreNow();
+    case 'fillie:apps-list':
+      return applications.list(message.query satisfies ApplicationsRequest);
+    case 'fillie:apps-save':
+      return applications.save(message.app);
+    case 'fillie:apps-delete':
+      await applications.remove(message.id);
+      return { ok: true };
+    case 'fillie:apps-track':
+      return handleTrack(message.context);
     case 'fillie:get-memory':
       return storage.getMemory();
     case 'fillie:save-memory':
@@ -519,6 +701,12 @@ if (runtime?.onMessage) {
 }
 
 /** Keeps the worker alive long enough to answer a burst of messages. */
+chromeApi?.storage?.onChanged?.addListener((changes, area) => {
+  if (area !== 'local') return;
+  const watched = [STORAGE_KEYS.profile, STORAGE_KEYS.memory, 'fillie:resumes'];
+  if (watched.some((key) => key in changes)) scheduleBackup();
+});
+
 runtime?.onInstalled?.addListener(() => {
   storage.getSettings().catch(() => undefined);
 });
