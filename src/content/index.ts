@@ -15,6 +15,8 @@ import {
   type ServedBy,
 } from '../shared/messages';
 import { fingerprintOf, hydrateCustomSelects, scanDocument, type ScannedField } from './scanner';
+import { computeHashes } from '../core/cloud/fingerprint';
+import type { AccessState } from '../core/cloud/types';
 import { fillField, focusField, highlightField, readFieldValue, verifyFields } from './filler';
 import { FillieOverlay, type DraftState } from './overlay';
 import { VERSION } from '../shared/version';
@@ -112,6 +114,7 @@ const overlay = new FillieOverlay({
   onEdit: (plan, value, saveToFillie) => void handleEditField(plan, value, saveToFillie),
   onSaveAnswers: () => void learnFromPage(),
   onPickResume: (id) => resolveResumePick(id),
+  onUpgrade: () => void sendMessage({ type: 'fillie:open-account' }).catch(() => undefined),
 });
 
 function renderScanning(message: string, completed: number, total: number, indeterminate = false): void {
@@ -242,6 +245,19 @@ async function run(): Promise<void> {
 
     state.fields = new Map(fields.map((field) => [field.id, field]));
     state.context = buildContext(fields);
+
+    // Free users get a few fillings a week; the server counts them per device.
+    const access = await checkAccess();
+    if (!access.allowed) {
+      overlay.mount();
+      overlay.render({
+        kind: 'paywall',
+        message: access.reason ?? 'Sign in and unlock Fillie to keep filling forms.',
+        price: PRICE_LABEL,
+      });
+      return;
+    }
+    overlay.setPlanNote(planNote(access));
 
     renderScanning('Identifying questions', fields.length, fields.length);
 
@@ -669,6 +685,40 @@ window.addEventListener('keydown', (event) => {
 });
 
 /* ------------------------------------------------------------------ */
+/* Access + application tracking                                       */
+/* ------------------------------------------------------------------ */
+
+const PRICE_LABEL = '$5 one-time';
+
+/** If the check itself fails (service worker asleep, offline), do not lock the user out. */
+async function checkAccess(): Promise<AccessState> {
+  try {
+    return await sendMessage<AccessState>({ type: 'fillie:begin-run', url: location.href, device: await computeHashes() });
+  } catch {
+    return { allowed: true, plan: 'trial', remaining: 0, limit: 0, signedIn: false };
+  }
+}
+
+function planNote(access: AccessState): string {
+  if (access.plan === 'paid' || access.limit === 0) return '';
+  const left = access.remaining;
+  return `${left} free ${left === 1 ? 'filling' : 'fillings'} left this week`;
+}
+
+let tracked = false;
+
+/** Adds this application to the tracker, once per page. */
+async function trackApplication(): Promise<void> {
+  if (tracked || !state.plans.some((plan) => plan.fillResult?.filled)) return;
+  tracked = true;
+  try {
+    await sendMessage({ type: 'fillie:apps-track', context: state.context });
+  } catch {
+    tracked = false; // allow another try (e.g. from the button)
+  }
+}
+
+/* ------------------------------------------------------------------ */
 /* Learn on submit                                                     */
 /* ------------------------------------------------------------------ */
 
@@ -700,6 +750,7 @@ function collectAnswersToLearn(): Array<{ question: string; answer: string }> {
 }
 
 async function learnFromPage(): Promise<void> {
+  void trackApplication();
   const entries = collectAnswersToLearn();
   if (!entries.length) return;
   try {

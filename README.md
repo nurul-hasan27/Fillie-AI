@@ -15,9 +15,11 @@ A free, open-source Chrome extension that fills job applications and forms from 
 ## Why Fillie
 
 - **You stay in charge.** It never clicks Submit.
-- **Private.** Your data stays in your browser. No servers, no accounts.
+- **Private.** Your profile stays on your device. API keys never leave it.
 - **Works offline.** AI is optional.
 - **Learns.** It remembers answers you approve.
+- **Tracks your applications.** Status, interview dates, offers (LPA), notes and a rating for each company.
+- **Safe backup.** Sign in to back up your data and applications in the cloud.
 
 ## Install
 
