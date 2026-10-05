@@ -16,6 +16,7 @@ export interface ResumeChoice {
 }
 
 export type OverlayView =
+  | { kind: 'paywall'; message: string; price: string }
   | { kind: 'choose-resume'; options: ResumeChoice[] }
   | { kind: 'scanning'; message: string; completed: number; total: number; indeterminate: boolean }
   | { kind: 'tasks'; plans: FieldPlan[]; stats: SessionStats; company?: string; role?: string }
@@ -63,6 +64,8 @@ export interface OverlayCallbacks {
   onSaveAnswers?(): void;
   /** Resume picked for this application; 'none' means profile only. */
   onPickResume?(id: string): void;
+  /** Opens the account page to sign in and unlock. */
+  onUpgrade?(): void;
 }
 
 const HIGHLIGHT_CSS = `
@@ -101,6 +104,12 @@ export class FillieOverlay {
   private activeFilter: OverlayFilter = 'all';
   /** Which platform and model produced this session's answers, e.g. "Gemini · gemini-3.5-flash-lite". */
   private aiSource = '';
+  /** e.g. "2 free fillings left this week". */
+  private planNote = '';
+
+  setPlanNote(text: string): void {
+    this.planNote = text;
+  }
 
   setAiSource(label: string): void {
     this.aiSource = label;
@@ -231,6 +240,9 @@ export class FillieOverlay {
 
     const body = el('div', { class: 'body' });
     switch (view.kind) {
+      case 'paywall':
+        body.appendChild(this.renderPaywall(view));
+        break;
       case 'choose-resume':
         body.appendChild(this.renderChooseResume(view));
         break;
@@ -317,6 +329,21 @@ export class FillieOverlay {
     status.appendChild(iconButton('close', 'Close Fillie', () => this.callbacks.onDismiss()));
     head.appendChild(status);
     return head;
+  }
+
+  private renderPaywall(view: Extract<OverlayView, { kind: 'paywall' }>): HTMLElement {
+    const wrap = el('div', { class: 'paywall' });
+    const badge = el('div', { class: 'paywall-badge' });
+    badge.appendChild(icon('lock', { size: 22 }));
+    wrap.appendChild(badge);
+    wrap.appendChild(text('h3', { class: 'choose-title' }, 'Your free fillings are used up'));
+    wrap.appendChild(text('p', { class: 'choose-sub' }, view.message));
+    const list = el('ul', { class: 'paywall-list' });
+    for (const line of ['Unlimited form filling, forever', 'Application tracker and cloud backup', 'One payment. No subscription.']) {
+      list.appendChild(text('li', {}, line));
+    }
+    wrap.appendChild(list);
+    return wrap;
   }
 
   private renderChooseResume(view: Extract<OverlayView, { kind: 'choose-resume' }>): HTMLElement {
@@ -559,6 +586,10 @@ export class FillieOverlay {
     grid.appendChild(totalStat);
 
     container.appendChild(grid);
+
+    if (this.planNote) {
+      container.appendChild(text('div', { class: 'plan-note' }, this.planNote));
+    }
 
     if (this.aiSource) {
       const source = el('div', { class: 'ai-source', title: 'The platform and model that wrote these answers' });
@@ -1243,7 +1274,7 @@ export class FillieOverlay {
       'data-fillie-action': 'save-answers',
     });
     save.appendChild(icon('brain', { size: 14 }));
-    save.appendChild(text('span', {}, 'Save answers to memory'));
+    save.appendChild(text('span', {}, 'Save answers & track application'));
     save.addEventListener('click', () => {
       this.callbacks.onSaveAnswers?.();
       save.replaceChildren(icon('check', { size: 14 }), text('span', {}, 'Saved'));
@@ -1301,6 +1332,14 @@ export class FillieOverlay {
       note.appendChild(icon('shield', { size: 13 }));
       note.appendChild(text('span', {}, 'Check the page, then submit it yourself.'));
       foot.appendChild(note);
+      return foot;
+    }
+
+    if (view.kind === 'paywall') {
+      const unlock = el('button', { class: 'btn btn-primary btn-lg btn-block', type: 'button', 'data-fillie-action': 'unlock' });
+      unlock.appendChild(text('span', {}, `Sign in & unlock · ${view.price}`));
+      unlock.addEventListener('click', () => this.callbacks.onUpgrade?.());
+      foot.appendChild(unlock);
       return foot;
     }
 

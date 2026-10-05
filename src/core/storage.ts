@@ -120,6 +120,23 @@ export class Storage {
     return memory;
   }
 
+  /** Generic keyed access for modules that own their own storage key. */
+  async read<T>(key: string): Promise<T | undefined> {
+    const area = this.area;
+    const stored = area ? await area.get([key]) : { [key]: this.memoryArea[key] };
+    return stored[key] as T | undefined;
+  }
+
+  async put(key: string, value: unknown): Promise<void> {
+    await this.write(key, value);
+  }
+
+  async drop(key: string): Promise<void> {
+    const area = this.area;
+    if (area) await area.remove([key]);
+    else delete this.memoryArea[key];
+  }
+
   /**
    * Named resumes. A single resume saved by an earlier version (under
    * `fillie:resume-text`) is adopted as "Main" the first time this is read.

@@ -2,7 +2,7 @@
   "manifest_version": 3,
   "name": "Fillie — Personal AI Form Assistant",
   "short_name": "Fillie",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Fillie understands online forms, answers them from your profile and learned answers, and never submits anything without you.",
   "minimum_chrome_version": "116",
   "icons": {
@@ -37,7 +37,7 @@
     "page": "pages/app.html",
     "open_in_tab": true
   },
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "identity"],
   "host_permissions": [
     "http://*/*",
     "https://*/*",
@@ -45,7 +45,8 @@
     "https://generativelanguage.googleapis.com/*",
     "https://openrouter.ai/*",
     "https://api.together.xyz/*",
-    "https://api.cerebras.ai/*"
+    "https://api.cerebras.ai/*",
+    "https://*.supabase.co/*"
   ],
   "commands": {
     "run-fillie": {

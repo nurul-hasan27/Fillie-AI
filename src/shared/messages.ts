@@ -1,3 +1,4 @@
+import type { AccessState, Application, ApplicationStatus, OAuthProvider } from '../core/cloud/types';
 import type {
   AIProviderId,
   AIProviderConfig,
@@ -97,7 +98,28 @@ export interface RememberBatchRequest {
   context: ApplicationContext;
 }
 
+export interface DeviceHashes {
+  hw: string;
+  br: string;
+}
+
+export interface AccountStatus {
+  cloudConfigured: boolean;
+  access: AccessState;
+  /** Applications saved on this device, waiting to upload. */
+  pendingApplications: number;
+  priceLabel: string;
+  lastBackupAt?: number;
+}
+
+export interface ApplicationsRequest {
+  offset?: number;
+  search?: string;
+  status?: ApplicationStatus | 'all';
+}
+
 export interface StatusResponse {
+  access?: AccessState;
   hasProfile: boolean;
   profileCompleteness: number;
   aiConfigured: boolean;
@@ -142,6 +164,20 @@ export type BackgroundMessage =
   | { type: 'fillie:save-resumes'; state: ResumesState }
   | { type: 'fillie:suggest-resume'; context: ApplicationContext }
   | { type: 'fillie:remember-batch'; payload: RememberBatchRequest }
+  | { type: 'fillie:account-status'; device: DeviceHashes }
+  | { type: 'fillie:begin-run'; url: string; device: DeviceHashes }
+  | { type: 'fillie:sign-in'; mode: 'signin' | 'signup'; email: string; password: string }
+  | { type: 'fillie:sign-in-oauth'; provider: OAuthProvider }
+  | { type: 'fillie:sign-out' }
+  | { type: 'fillie:checkout' }
+  | { type: 'fillie:open-account' }
+  | { type: 'fillie:refresh-payment'; device: DeviceHashes }
+  | { type: 'fillie:backup-now' }
+  | { type: 'fillie:restore-now' }
+  | { type: 'fillie:apps-list'; query: ApplicationsRequest }
+  | { type: 'fillie:apps-save'; app: Application }
+  | { type: 'fillie:apps-delete'; id: string }
+  | { type: 'fillie:apps-track'; context: ApplicationContext }
   | { type: 'fillie:get-memory' }
   | { type: 'fillie:save-memory'; memory: LearnedAnswer[] }
   | { type: 'fillie:report-session'; url: string; stats: SessionStats; aiCalls?: number }
