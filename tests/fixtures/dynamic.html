@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Dynamic application — Kite</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f6f6f4; }
+      main { max-width: 680px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 14px; border: 1px solid #e6e5e0; }
+      label { display: block; margin: 16px 0 4px; font-weight: 550; font-size: 14px; }
+      input, textarea, select { width: 100%; padding: 9px 10px; border: 1px solid #d5d4cd; border-radius: 8px; font: inherit; box-sizing: border-box; }
+      button { margin-top: 24px; padding: 12px 18px; border-radius: 9px; border: 0; background: #5b53d6; color: #fff; font: inherit; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Kite — Platform Engineer</h1>
+      <p>Location: Berlin, Germany · Hybrid</p>
+      <form id="apply">
+        <label for="name">Full name</label>
+        <input id="name" name="name" type="text" />
+
+        <label for="hasinternship">Do you have internship experience?</label>
+        <select id="hasinternship" name="hasinternship">
+          <option value="">Choose</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+        </select>
+
+        <div id="internship-details"></div>
+
+        <button type="submit" id="submit">Apply now</button>
+      </form>
+    </main>
+    <script>
+      const select = document.getElementById('hasinternship');
+      const container = document.getElementById('internship-details');
+      let built = false;
+      select.addEventListener('change', () => {
+        if (select.value === 'yes' && !built) {
+          container.innerHTML = `
+            <label for="org">Which company did you intern at?</label>
+            <input id="org" name="internshipOrg" type="text" />
+            <label for="role">What was your role?</label>
+            <input id="role" name="internshipRole" type="text" />
+            <label for="what">What did you build there?</label>
+            <textarea id="what" name="internshipWork" rows="4"></textarea>
+          `;
+          built = true;
+          window.__fillieInjectedFields = true;
+        }
+      });
+      document.getElementById('apply').addEventListener('submit', (event) => {
+        event.preventDefault();
+        window.__fillieSubmitted = true;
+      });
+    </script>
+  </body>
+</html>

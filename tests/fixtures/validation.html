@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Validation test form — Fillie</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f6f6f4; }
+      main { max-width: 640px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 14px; border: 1px solid #e6e5e0; }
+      label { display: block; margin: 16px 0 4px; font-weight: 550; font-size: 14px; }
+      input { width: 100%; padding: 9px 10px; border: 1px solid #d5d4cd; border-radius: 8px; font: inherit; box-sizing: border-box; }
+      input[aria-invalid="true"] { border-color: #b3261e; }
+      .err { color: #b3261e; font-size: 13px; margin-top: 4px; }
+      button { margin-top: 24px; padding: 12px 18px; border-radius: 9px; border: 0; background: #5b53d6; color: #fff; font: inherit; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Form with strict validation</h1>
+      <form id="apply">
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" aria-describedby="email-error" />
+        <span class="err" id="email-error" role="alert" hidden></span>
+
+        <label for="phone">Phone number (exactly 10 digits)</label>
+        <input id="phone" name="phone" type="text" aria-describedby="phone-error" />
+        <span class="err" id="phone-error" role="alert" hidden></span>
+
+        <label for="age">Age (must be a whole number under 100)</label>
+        <input id="age" name="age" type="number" aria-describedby="age-error" />
+        <span class="err" id="age-error" role="alert" hidden></span>
+
+        <button type="button" id="submit">Check</button>
+      </form>
+    </main>
+
+    <script>
+      const rules = {
+        email: (value) => (/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value) ? '' : 'Enter a valid email address'),
+        phone: (value) => (/^\d{10}$/.test(value.trim()) ? '' : 'Phone must be exactly 10 digits'),
+        age: (value) => (/^\d+$/.test(value.trim()) && Number(value) < 100 ? '' : 'Enter an age under 100'),
+      };
+      for (const [id, validate] of Object.entries(rules)) {
+        const input = document.getElementById(id);
+        const error = document.getElementById(`${id}-error`);
+        input.addEventListener('change', () => {
+          const message = validate(input.value);
+          error.textContent = message;
+          error.hidden = !message;
+          input.setAttribute('aria-invalid', message ? 'true' : 'false');
+        });
+      }
+    </script>
+  </body>
+</html>

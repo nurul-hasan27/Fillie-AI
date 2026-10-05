@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Fillie — Personal AI Form Assistant</title>
+    <link rel="stylesheet" href="styles.css" />
+    <link rel="stylesheet" href="app.css" />
+  </head>
+  <body>
+    <!-- The shell renders here; a static message covers the moment before the
+         module has loaded, so the page is never blank. -->
+    <div id="app">
+      <p style="padding:32px;color:var(--ff-text-tertiary, #6b6b73);font:14px system-ui, sans-serif">
+        Loading Fillie…
+      </p>
+    </div>
+    <div id="toast-host" class="toast-host" aria-live="polite"></div>
+    <script type="module" src="app.js"></script>
+  </body>
+</html>

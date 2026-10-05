@@ -1,0 +1,8 @@
+# Shows the "Sponsor" button on the repository once GitHub Sponsors is enabled.
+# Replace YOUR-GITHUB-USERNAME with your GitHub handle (leave the line out until
+# your Sponsors profile is approved, otherwise GitHub flags the file).
+github: [YOUR-GITHUB-USERNAME]
+
+# Anything else you accept: UPI / cards through the donate page on the site.
+# Replace with your deployed site URL.
+custom: ['https://YOUR-SITE.vercel.app/#donate']

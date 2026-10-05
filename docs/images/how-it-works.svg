@@ -1,0 +1,20 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 230" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+  <rect width="900" height="230" rx="20" fill="#f6f5f4"/>
+  <defs><marker id="a" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#191918"/></marker></defs>
+  <g font-size="15" font-weight="600" fill="#191918" text-anchor="middle">
+    <rect x="24" y="60" width="150" height="110" rx="14" fill="#fff" stroke="#00000018"/>
+    <text x="99" y="108" font-size="30">📝</text><text x="99" y="140">Open a form</text><text x="99" y="158" font-size="12" font-weight="400" fill="#615d59">any website</text>
+    <rect x="212" y="60" width="150" height="110" rx="14" fill="#e3f1fc"/>
+    <text x="287" y="108" font-size="30">🔎</text><text x="287" y="140">Fillie reads it</text><text x="287" y="158" font-size="12" font-weight="400" fill="#615d59">questions only</text>
+    <rect x="400" y="60" width="150" height="110" rx="14" fill="#fff3d6"/>
+    <text x="475" y="108" font-size="30">🧠</text><text x="475" y="140">Finds answers</text><text x="475" y="158" font-size="12" font-weight="400" fill="#615d59">profile · resume · memory</text>
+    <rect x="588" y="60" width="150" height="110" rx="14" fill="#fde8e4"/>
+    <text x="663" y="108" font-size="30">✨</text><text x="663" y="140">Fills the fields</text><text x="663" y="158" font-size="12" font-weight="400" fill="#615d59">and flags doubts</text>
+    <rect x="776" y="60" width="100" height="110" rx="14" fill="#02093a"/>
+    <text x="826" y="108" font-size="30">👆</text><text x="826" y="140" fill="#fff">You press</text><text x="826" y="158" fill="#fff">Submit</text>
+  </g>
+  <g stroke="#191918" stroke-width="2" fill="none" marker-end="url(#a)">
+    <path d="M176 115H208"/><path d="M364 115H396"/><path d="M552 115H584"/><path d="M740 115H772"/>
+  </g>
+  <text x="450" y="30" text-anchor="middle" font-size="13" fill="#615d59">Fillie never clicks submit. You are always in charge.</text>
+</svg>

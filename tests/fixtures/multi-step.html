@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Multi-step application — Loop</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f6f6f4; }
+      main { max-width: 660px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 14px; border: 1px solid #e6e5e0; }
+      .step { display: none; }
+      .step.active { display: block; }
+      h2 { font-size: 16px; margin: 0 0 4px; }
+      .progress { height: 4px; background: #e6e5e0; border-radius: 999px; margin: 12px 0 20px; }
+      .progress i { display: block; height: 100%; background: #5b53d6; border-radius: inherit; width: 33%; }
+      label { display: block; margin: 16px 0 4px; font-weight: 550; font-size: 14px; }
+      input, textarea { width: 100%; padding: 9px 10px; border: 1px solid #d5d4cd; border-radius: 8px; font: inherit; box-sizing: border-box; }
+      .actions { display: flex; gap: 8px; margin-top: 24px; }
+      button { padding: 10px 16px; border-radius: 9px; border: 1px solid #d5d4cd; background: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+      button.primary { background: #5b53d6; border-color: #5b53d6; color: #fff; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Loop — Customer Success</h1>
+      <div class="progress"><i id="progress-bar"></i></div>
+
+      <form id="apply">
+        <section class="step active" data-step="1">
+          <h2>Step 1 — About you</h2>
+          <label for="name">Full name</label>
+          <input id="name" name="name" type="text" />
+          <label for="email">Email address</label>
+          <input id="email" name="email" type="email" />
+          <div class="actions"><button class="primary next" type="button">Continue</button></div>
+        </section>
+
+        <section class="step" data-step="2">
+          <h2>Step 2 — Experience</h2>
+          <label for="current-role">Current or most recent role</label>
+          <input id="current-role" name="currentRole" type="text" />
+          <label for="years">Years of experience</label>
+          <input id="years" name="years" type="number" />
+          <div class="actions">
+            <button class="back" type="button">Back</button>
+            <button class="primary next" type="button">Continue</button>
+          </div>
+        </section>
+
+        <section class="step" data-step="3">
+          <h2>Step 3 — Anything else</h2>
+          <label for="note">Why are you interested in Loop?</label>
+          <textarea id="note" name="note" rows="5"></textarea>
+          <div class="actions">
+            <button class="back" type="button">Back</button>
+            <button class="primary" type="submit" id="submit">Submit application</button>
+          </div>
+        </section>
+      </form>
+    </main>
+
+    <script>
+      let current = 1;
+      const show = (step) => {
+        current = step;
+        document.querySelectorAll('.step').forEach((section) => {
+          section.classList.toggle('active', Number(section.dataset.step) === step);
+        });
+        document.getElementById('progress-bar').style.width = `${(step / 3) * 100}%`;
+      };
+      document.querySelectorAll('.next').forEach((button) =>
+        button.addEventListener('click', () => show(Math.min(3, current + 1))),
+      );
+      document.querySelectorAll('.back').forEach((button) =>
+        button.addEventListener('click', () => show(Math.max(1, current - 1))),
+      );
+      document.getElementById('apply').addEventListener('submit', (event) => {
+        event.preventDefault();
+        window.__fillieSubmitted = true;
+      });
+    </script>
+  </body>
+</html>

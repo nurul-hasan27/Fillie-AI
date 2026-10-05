@@ -1,0 +1,13 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 190" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+  <rect width="900" height="190" rx="20" fill="#f6f5f4"/>
+  <g font-size="14" font-weight="600" fill="#191918" text-anchor="middle">
+    <rect x="24" y="30" width="200" height="130" rx="14" fill="#fff" stroke="#00000018"/><circle cx="52" cy="58" r="14" fill="#0075de"/><text x="52" y="63" fill="#fff">1</text>
+    <text x="124" y="100">Download &amp; unzip</text><text x="124" y="122" font-size="12" font-weight="400" fill="#615d59">fillie-extension.zip</text>
+    <rect x="248" y="30" width="200" height="130" rx="14" fill="#fff" stroke="#00000018"/><circle cx="276" cy="58" r="14" fill="#0075de"/><text x="276" y="63" fill="#fff">2</text>
+    <text x="348" y="100">Open chrome://extensions</text><text x="348" y="122" font-size="12" font-weight="400" fill="#615d59">turn on Developer mode</text>
+    <rect x="472" y="30" width="200" height="130" rx="14" fill="#fff" stroke="#00000018"/><circle cx="500" cy="58" r="14" fill="#0075de"/><text x="500" y="63" fill="#fff">3</text>
+    <text x="572" y="100">Load unpacked</text><text x="572" y="122" font-size="12" font-weight="400" fill="#615d59">pick the unzipped folder</text>
+    <rect x="696" y="30" width="180" height="130" rx="14" fill="#fff3d6"/><circle cx="724" cy="58" r="14" fill="#ffb110"/><text x="724" y="63" fill="#191918">4</text>
+    <text x="786" y="100">Add your profile</text><text x="786" y="122" font-size="12" font-weight="400" fill="#615d59">and an optional AI key</text>
+  </g>
+</svg>

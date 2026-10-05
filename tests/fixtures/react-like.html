@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Application — Vantage</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f6f6f4; }
+      main { max-width: 660px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 14px; border: 1px solid #e6e5e0; }
+      .field { margin: 16px 0; }
+      label { display: block; font-weight: 550; font-size: 14px; margin-bottom: 4px; }
+      input, textarea { width: 100%; padding: 9px 10px; border: 1px solid #d5d4cd; border-radius: 8px; font: inherit; box-sizing: border-box; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Vantage — Software Engineer</h1>
+      <p>
+        This page behaves like a React controlled form: it installs a value tracker on each
+        input and ignores changes the tracker does not recognise, which is why a naive
+        <code>element.value = x</code> is silently discarded.
+      </p>
+
+      <form id="apply">
+        <div class="field">
+          <label for="email">Email address</label>
+          <input id="email" type="email" />
+        </div>
+        <div class="field">
+          <label for="linkedin">LinkedIn profile URL</label>
+          <input id="linkedin" type="text" />
+        </div>
+        <div class="field">
+          <label for="why">Why do you want to join Vantage?</label>
+          <textarea id="why" rows="5"></textarea>
+        </div>
+        <button type="button" id="submit">Submit</button>
+      </form>
+    </main>
+
+    <script>
+      // Faithful to React's input value tracking: the tracker holds the last value
+      // the component knew about, and the change handler only accepts a write when
+      // the DOM value differs from it.
+      const state = { email: '', linkedin: '', why: '' };
+
+      const track = (input) => {
+        let tracked = '';
+        const descriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+        Object.defineProperty(input, 'value', {
+          configurable: true,
+          get() {
+            return descriptor.get.call(input);
+          },
+          set(next) {
+            descriptor.set.call(input, next);
+            tracked = String(next ?? '');
+          },
+        });
+        return {
+          read: () => descriptor.get.call(input),
+          current: () => tracked,
+        };
+      };
+
+      const wire = (id, key) => {
+        const input = document.getElementById(id);
+        const tracker = track(input);
+        input.addEventListener('input', () => {
+          const domValue = tracker.read();
+          // React ignores anything the tracker already saw.
+          if (domValue === tracker.current()) return;
+          state[key] = domValue;
+          tracker.current = () => domValue;
+        });
+      };
+
+      wire('email', 'email');
+      wire('linkedin', 'linkedin');
+      wire('why', 'why');
+
+      window.__fillieState = state;
+      document.getElementById('submit').addEventListener('click', () => {
+        window.__fillieSubmitted = true;
+      });
+    </script>
+  </body>
+</html>

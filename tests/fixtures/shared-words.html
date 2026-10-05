@@ -1,0 +1,62 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Referral form — Contoso</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f6f6f4; color: #1c1b1f; }
+      main { max-width: 700px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 14px; border: 1px solid #e6e5e0; }
+      label { display: block; margin: 16px 0 4px; font-weight: 550; font-size: 14px; }
+      input, select { width: 100%; padding: 9px 10px; border: 1px solid #d5d4cd; border-radius: 8px; font: inherit; box-sizing: border-box; }
+      button { margin-top: 24px; padding: 12px 18px; border-radius: 9px; border: 0; background: #5b53d6; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Referral and eligibility</h1>
+      <p>
+        Each question below shares a keyword with a stored profile fact without asking
+        for that fact. Fillie has to answer only the ones that genuinely match, and
+        leave the rest for the applicant rather than reusing an unrelated value.
+      </p>
+
+      <form id="referral" novalidate>
+        <label for="applicant">Applicant name</label>
+        <input id="applicant" name="applicant" type="text" />
+
+        <label for="employer">Company name (where you interned)</label>
+        <input id="employer" name="employer" type="text" />
+
+        <label for="referee">Referee name</label>
+        <input id="referee" name="referee" type="text" />
+
+        <label for="notice">Notice period</label>
+        <input id="notice" name="notice" type="text" />
+
+        <label for="joining">When can you start?</label>
+        <input id="joining" name="joining" type="text" />
+
+        <label for="board">School board</label>
+        <input id="board" name="board" type="text" />
+
+        <label for="marks">12th percentage</label>
+        <input id="marks" name="marks" type="text" />
+
+        <label for="preferred">Preferred location</label>
+        <input id="preferred" name="preferred" type="text" />
+
+        <label for="current">Current location</label>
+        <input id="current" name="current" type="text" />
+
+        <button type="submit" id="submit">Send referral</button>
+      </form>
+    </main>
+    <script>
+      document.getElementById('referral').addEventListener('submit', (event) => {
+        event.preventDefault();
+        window.__fillieSubmitted = true;
+      });
+    </script>
+  </body>
+</html>

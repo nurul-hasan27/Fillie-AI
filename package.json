@@ -1,0 +1,50 @@
+{
+  "name": "fillie",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fillie \u2014 a personal AI form-filling assistant for Chrome.",
+  "type": "module",
+  "scripts": {
+    "clean": "node scripts/clean.mjs",
+    "build": "node scripts/build.mjs",
+    "build:dev": "node scripts/build.mjs --dev",
+    "watch": "node scripts/build.mjs --dev --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "npm run test:unit && npm run test:e2e",
+    "test:unit": "vitest run",
+    "test:watch": "vitest watch",
+    "test:e2e": "playwright test",
+    "test:all": "npm run typecheck && npm run test:unit && npm run test:e2e",
+    "verify": "npm run build && npm run test:all",
+    "fixtures": "node scripts/make-fixture-documents.mjs",
+    "package": "node scripts/package.mjs"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.49.1",
+    "@types/chrome": "0.0.287",
+    "@types/node": "^22.10.2",
+    "esbuild": "0.24.2",
+    "happy-dom": "15.11.7",
+    "typescript": "5.7.2",
+    "vitest": "2.1.8"
+  },
+  "license": "MIT",
+  "author": "Nurul Hasan",
+  "homepage": "https://YOUR-SITE.vercel.app",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/YOUR-GITHUB-USERNAME/fillie.git"
+  },
+  "bugs": {
+    "url": "https://github.com/YOUR-GITHUB-USERNAME/fillie/issues"
+  },
+  "keywords": [
+    "chrome-extension",
+    "manifest-v3",
+    "form-filler",
+    "autofill",
+    "job-application",
+    "typescript",
+    "ai"
+  ]
+}

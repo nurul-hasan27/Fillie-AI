@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Senior Engineer — Kestrel (hostile markup)</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f6f6f4; }
+      main { max-width: 700px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 14px; border: 1px solid #e6e5e0; }
+      label { display: block; margin: 16px 0 4px; font-weight: 550; font-size: 14px; }
+      input, select, textarea { width: 100%; padding: 9px 10px; border: 1px solid #d5d4cd; border-radius: 8px; font: inherit; box-sizing: border-box; }
+      .hint { color: #6b6b73; font-size: 12px; }
+      button { margin-top: 24px; padding: 12px 18px; border-radius: 9px; border: 0; background: #5b53d6; color: #fff; font: inherit; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Kestrel</h1>
+      <p>Senior Engineer · Remote (EU)</p>
+
+      <form id="apply" novalidate>
+        <!-- No <label for>, no aria-label, no placeholder: the only clue is the
+             text inside the label element, which wraps its own input. -->
+        <label>
+          Full name
+          <input name="name" type="text" />
+        </label>
+
+        <label>
+          Email address
+          <input name="email" type="email" />
+        </label>
+
+        <!-- ARIA-only labelling, no visible label at all. -->
+        <input name="phone" type="tel" aria-label="Phone number" />
+
+        <!-- A <legend> that is not the question — the real question is in a
+             <span> inside the fieldset. The legend must not be mistaken for it. -->
+        <fieldset>
+          <legend>Kestrel — Engineering</legend>
+          <span class="field-label" id="lvl-label">Desired seniority level</span>
+          <div>
+            <input type="radio" id="junior" name="seniority" value="Junior" />
+            <label for="junior">Junior</label>
+            <input type="radio" id="mid" name="seniority" value="Mid-level" />
+            <label for="mid">Mid-level</label>
+            <input type="radio" id="senior" name="seniority" value="Senior" />
+            <label for="senior">Senior</label>
+          </div>
+        </fieldset>
+
+        <!-- The question is in a <th> inside a table header. -->
+        <table>
+          <tr>
+            <th><label for="portfolio">Portfolio or personal site</label></th>
+          </tr>
+          <tr>
+            <td><input id="portfolio" name="portfolio" type="url" placeholder="https://" /></td>
+          </tr>
+        </table>
+
+        <!-- Question split across elements, with the hint carrying the units. -->
+        <label for="years">Years of professional experience</label>
+        <input id="years" name="years" type="number" />
+        <span class="hint">in years, e.g. 2.5</span>
+
+        <!-- A honeypot: hidden from users, attractive to bots. -->
+        <div style="position:absolute;left:-9999px" aria-hidden="true">
+          <label for="company-site">Company website</label>
+          <input id="company-site" name="company_site" type="text" tabindex="-1" autocomplete="off" />
+        </div>
+
+        <label for="why">Why Kestrel?</label>
+        <textarea id="why" name="why" rows="4"></textarea>
+
+        <!-- A password field must be left alone entirely. -->
+        <label for="pw">Create a password</label>
+        <input id="pw" name="password" type="password" autocomplete="new-password" />
+
+        <button type="submit" id="submit">Submit</button>
+      </form>
+    </main>
+
+    <script>
+      document.getElementById('apply').addEventListener('submit', (event) => {
+        event.preventDefault();
+        window.__fillieSubmitted = true;
+      });
+    </script>
+  </body>
+</html>

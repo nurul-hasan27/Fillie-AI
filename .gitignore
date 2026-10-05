@@ -1,0 +1,22 @@
+node_modules/
+dist/
+release/
+test-results/
+playwright-report/
+.playwright-report/
+*.log
+*.zip
+.DS_Store
+
+# Fillie has no build-time secrets: API keys live in chrome.storage.local and
+# are typed in by each user. Keep it that way.
+.env
+.env.*
+*.key
+*.pem
+
+# Local AI-assistant notes and editor state
+MEMORY.md
+.claude/
+.vscode/
+.idea/

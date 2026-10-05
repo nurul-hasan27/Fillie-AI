@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Apply — Contoso</title>
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f6f6f4; color: #1c1b1f; }
+      main { max-width: 700px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 14px; border: 1px solid #e6e5e0; }
+      label { display: block; margin: 16px 0 4px; font-weight: 550; font-size: 14px; }
+      input, select, textarea { width: 100%; padding: 9px 10px; border: 1px solid #d5d4cd; border-radius: 8px; font: inherit; box-sizing: border-box; }
+      button { margin-top: 24px; padding: 12px 18px; border-radius: 9px; border: 0; background: #5b53d6; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Apply at Contoso</h1>
+      <p>Role: Data Engineer · Location: Remote (EU)</p>
+      <form id="apply" novalidate>
+        <label for="name">Full name</label>
+        <input id="name" name="name" type="text" />
+
+        <label for="salary">What are your salary expectations?</label>
+        <input id="salary" name="salary" type="text" placeholder="e.g. €70,000" />
+
+        <label for="relocate">Are you willing to relocate for this role?</label>
+        <select id="relocate" name="relocate">
+          <option value="">Choose</option>
+          <option value="yes">Yes</option>
+          <option value="no">No</option>
+          <option value="maybe">Maybe, with support</option>
+        </select>
+
+        <label for="leadership">Describe a situation where you showed leadership.</label>
+        <textarea id="leadership" name="leadership" rows="6"></textarea>
+
+        <label for="failure">Tell us about a time something went wrong and what you learned.</label>
+        <textarea id="failure" name="failure" rows="6"></textarea>
+
+        <label for="strength">What would you say your greatest strength is, and why?</label>
+        <textarea id="strength" name="strength" rows="4"></textarea>
+
+        <button type="submit" id="submit">Send application</button>
+      </form>
+    </main>
+    <script>
+      document.getElementById('apply').addEventListener('submit', (event) => {
+        event.preventDefault();
+        window.__fillieSubmitted = true;
+      });
+    </script>
+  </body>
+</html>

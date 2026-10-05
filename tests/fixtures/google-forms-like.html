@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Google Forms-like survey</title>
+    <style>
+      body { font-family: "Google Sans", Roboto, system-ui, sans-serif; margin: 0; background: #fff; color: #202124; }
+      .freebirdFormviewerViewForm { max-width: 640px; margin: 0 auto; padding: 24px; }
+      .freebirdFormviewerComponentsQuestionBaseRoot { margin: 0 0 32px; }
+      .freebirdFormviewerQuestionHeader { font-size: 16px; font-weight: 500; margin-bottom: 8px; }
+      .freebirdFormviewerComponentsQuestionBaseTitle .M7eMe { margin-right: 4px; color: #d93025; }
+      .freebirdTextinput, textarea { width: 100%; padding: 10px 12px; border: 1px solid #dadce0; border-radius: 4px; font: inherit; box-sizing: border-box; }
+      [role="listbox"] { border: 1px solid #dadce0; border-radius: 4px; padding: 10px 12px; display: flex; justify-content: space-between; }
+      [role="option"] { display: none; padding: 8px 12px; cursor: pointer; }
+      [role="listbox"][aria-expanded="true"] [role="option"] { display: block; }
+      .MocG8c .SG0AAe { display: block; margin: 6px 0; font-size: 14px; }
+      [role="radio"], [role="checkbox"] { width: 18px; height: 18px; border: 2px solid #5f6368; border-radius: 50%; display: inline-block; vertical-align: middle; }
+      [role="checkbox"] { border-radius: 3px; }
+      [role="radio"][aria-checked="true"], [role="checkbox"][aria-checked="true"] { border-color: #1a73e8; background: #1a73e8; }
+      button { padding: 10px 18px; border: 0; border-radius: 4px; background: #1a73e8; color: #fff; font: inherit; font-weight: 500; cursor: pointer; }
+    </style>
+  </head>
+  <body>
+    <div class="freebirdFormviewerViewForm" role="form">
+      <h1>Developer survey</h1>
+
+      <div class="freebirdFormviewerComponentsQuestionBaseRoot">
+        <div class="freebirdFormviewerQuestionHeader">
+          <div class="freebirdFormviewerComponentsQuestionBaseTitle">
+            <span class="M7eMe" aria-hidden="true">*</span>
+            <div class="MocG8c">
+              <span class="MocG8c">Which department do you want to join?</span>
+            </div>
+          </div>
+        </div>
+        <div
+          id="entry.1001"
+          class="r2sak"
+          jsname="YPqjbf"
+          role="listbox"
+          aria-label="Which department do you want to join?"
+          aria-expanded="false"
+        >
+          <div aria-selected="true" jsname="LgbsSb"><div role="presentation">Choose</div></div>
+          <div role="option" jsname="OxZ0lf"><div role="presentation">Engineering</div></div>
+          <div role="option" jsname="OxZ0lf"><div role="presentation">Design</div></div>
+          <div role="option" jsname="OxZ0lf"><div role="presentation">Data</div></div>
+          <div role="body" style="display:none"></div>
+        </div>
+      </div>
+
+      <div class="freebirdFormviewerComponentsQuestionBaseRoot">
+        <div class="freebirdFormviewerQuestionHeader">
+          <div class="freebirdFormviewerComponentsQuestionBaseTitle">
+            <span class="M7eMe" aria-hidden="true">*</span>
+            <div class="MocG8c"><span class="MocG8c">What is your email address?</span></div>
+          </div>
+        </div>
+        <div class="freebirdTextinput">
+          <input type="email" name="entry.1002" aria-label="What is your email address?" />
+        </div>
+      </div>
+
+      <div class="freebirdFormviewerComponentsQuestionBaseRoot">
+        <div class="freebirdFormviewerQuestionHeader">
+          <div class="freebirdFormviewerComponentsQuestionBaseTitle">
+            <span class="M7eMe" aria-hidden="true">*</span>
+            <div class="MocG8c"><span class="MocG8c">How would you rate your Python skills?</span></div>
+          </div>
+        </div>
+        <div role="radiogroup" aria-label="How would you rate your Python skills?">
+          <div class="SG0AAe" role="radio" aria-checked="false" aria-label="Beginner"></div><span>Beginner</span>
+          <div class="SG0AAe" role="radio" aria-checked="false" aria-label="Intermediate"></div><span>Intermediate</span>
+          <div class="SG0AAe" role="radio" aria-checked="false" aria-label="Advanced"></div><span>Advanced</span>
+        </div>
+      </div>
+
+      <div class="freebirdFormviewerComponentsQuestionBaseRoot">
+        <div class="freebirdFormviewerQuestionHeader">
+          <div class="freebirdFormviewerComponentsQuestionBaseTitle">
+            <div class="MocG8c"><span class="MocG8c">Anything else we should know?</span></div>
+          </div>
+        </div>
+        <div class="freebirdTextinput">
+          <textarea name="entry.1004" aria-label="Anything else we should know?" rows="4"></textarea>
+        </div>
+      </div>
+
+      <div class="freebirdFormviewerComponentsQuestionBaseRoot">
+        <div class="freebirdFormviewerQuestionHeader">
+          <div class="freebirdFormviewerComponentsQuestionBaseTitle">
+            <div class="MocG8c"><span class="MocG8c">Which of these do you use daily?</span></div>
+          </div>
+        </div>
+        <div role="group" aria-label="Which of these do you use daily?">
+          <div class="SG0AAe" role="checkbox" aria-checked="false" aria-label="Docker"></div><span>Docker</span>
+          <div class="SG0AAe" role="checkbox" aria-checked="false" aria-label="Kubernetes"></div><span>Kubernetes</span>
+        </div>
+      </div>
+
+      <button type="button" id="submit">Submit</button>
+    </div>
+
+    <script>
+      document.querySelectorAll('[role="listbox"]').forEach((listbox) => {
+        listbox.addEventListener('click', (event) => {
+          const option = event.target.closest('[role="option"]');
+          if (option) {
+            listbox.querySelector('[aria-selected="true"]').innerHTML = option.innerHTML;
+            listbox.setAttribute('aria-expanded', 'false');
+            listbox.setAttribute('data-selected', option.textContent.trim());
+          } else {
+            listbox.setAttribute('aria-expanded', listbox.getAttribute('aria-expanded') === 'true' ? 'false' : 'true');
+          }
+        });
+      });
+      document.querySelectorAll('[role="radio"], [role="checkbox"]').forEach((control) => {
+        control.addEventListener('click', () => {
+          const group = control.closest('[role="radiogroup"], [role="group"]');
+          const role = control.getAttribute('role');
+          if (role === 'radio' && group) {
+            group.querySelectorAll('[role="radio"]').forEach((other) => other.setAttribute('aria-checked', 'false'));
+          }
+          control.setAttribute('aria-checked', control.getAttribute('aria-checked') === 'true' ? 'false' : 'true');
+        });
+      });
+      document.getElementById('submit').addEventListener('click', () => {
+        window.__fillieSubmitted = true;
+      });
+    </script>
+  </body>
+</html>

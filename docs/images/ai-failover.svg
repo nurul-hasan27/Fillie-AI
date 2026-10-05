@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 250" font-family="-apple-system,Segoe UI,Helvetica,Arial,sans-serif">
+  <rect width="900" height="250" rx="20" fill="#f6f5f4"/>
+  <defs><marker id="b" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0L10 5L0 10z" fill="#191918"/></marker></defs>
+  <text x="450" y="34" text-anchor="middle" font-size="15" font-weight="600" fill="#191918">Several free AI keys, tried in the order you choose</text>
+  <g font-size="14" font-weight="600" fill="#191918" text-anchor="middle">
+    <rect x="30" y="80" width="130" height="90" rx="14" fill="#02093a"/><text x="95" y="120" fill="#fff">Your</text><text x="95" y="140" fill="#fff">question</text>
+    <rect x="210" y="70" width="150" height="110" rx="14" fill="#fff" stroke="#0075de" stroke-width="2"/>
+    <circle cx="235" cy="95" r="12" fill="#02093a"/><text x="235" y="100" fill="#fff" font-size="12">1</text>
+    <text x="290" y="125">Gemini</text><text x="290" y="148" font-size="12" font-weight="400" fill="#17795e">answers ✓</text>
+    <rect x="400" y="70" width="150" height="110" rx="14" fill="#fff" stroke="#00000018"/>
+    <circle cx="425" cy="95" r="12" fill="#02093a"/><text x="425" y="100" fill="#fff" font-size="12">2</text>
+    <text x="480" y="125">Cerebras</text><text x="480" y="148" font-size="12" font-weight="400" fill="#615d59">next in line</text>
+    <rect x="590" y="70" width="150" height="110" rx="14" fill="#fff" stroke="#00000018"/>
+    <circle cx="615" cy="95" r="12" fill="#02093a"/><text x="615" y="100" fill="#fff" font-size="12">3</text>
+    <text x="670" y="125">OpenRouter</text><text x="670" y="148" font-size="12" font-weight="400" fill="#615d59">…and so on</text>
+    <rect x="770" y="80" width="100" height="90" rx="14" fill="#fff3d6"/><text x="820" y="120">Answer</text><text x="820" y="140" font-size="11" font-weight="400" fill="#615d59">Gemini · model</text>
+  </g>
+  <g stroke="#191918" stroke-width="2" fill="none" marker-end="url(#b)">
+    <path d="M162 125H206"/><path d="M742 125H766"/>
+  </g>
+  <path d="M290 182 C290 215 480 215 480 184" stroke="#f64932" stroke-width="2" fill="none" stroke-dasharray="5 5" marker-end="url(#b)"/>
+  <text x="385" y="232" text-anchor="middle" font-size="12" fill="#f64932">quota used up? Fillie switches automatically</text>
+</svg>
