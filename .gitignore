@@ -20,3 +20,6 @@ MEMORY.md
 .claude/
 .vscode/
 .idea/
+
+# Supabase CLI local link state
+supabase/.temp/
