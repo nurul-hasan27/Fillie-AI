@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
   if (event.type === 'checkout.session.completed' || event.type === 'checkout.session.async_payment_succeeded') {
     const session = event.data.object;
     if (session.payment_status === 'paid' && session.client_reference_id) {
-      const ok = await recordPayment(admin, {
+      const result = await recordPayment(admin, {
         userId: session.client_reference_id,
         provider: 'stripe',
         ref: session.id,
@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
         currency: session.currency ?? 'usd',
       });
       // A failure returns 500 so Stripe retries instead of dropping a paid user.
-      if (!ok) return new Response('could not record payment', { status: 500 });
+      if (!result.ok) return new Response('could not record payment', { status: 500 });
     }
   }
   return new Response('ok');

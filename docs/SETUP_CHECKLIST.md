@@ -4,7 +4,7 @@ Everything below uses free plans. Payment providers only take a small fee per pa
 
 ## A. Supabase (accounts, database, server functions)
 1. Create a project at supabase.com. Note the **Project URL**, **anon public key**, and **project ref**.
-2. SQL editor: run `supabase/migrations/0001_init.sql`, then `0002_payments_feedback_admin.sql`.
+2. SQL editor: run `supabase/migrations/0001_init.sql`, then `0002_payments_feedback_admin.sql`, then `0003_table_grants.sql` (required: it gives the server and signed-in users their table privileges).
 3. Authentication → **Sign In / Providers**: turn on **Email** (enable "Confirm email"), **Google**, **GitHub** and **Apple**. Each needs a client id/secret from its console (Apple: Services ID + key from your developer account). Add Google first; the admin dashboard needs it.
 4. Authentication → **URL Configuration**:
    - Site URL: your Vercel site.
