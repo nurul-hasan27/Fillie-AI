@@ -39,14 +39,20 @@ async function stripe(user: { id: string; email?: string }): Promise<Response> {
     body: form,
   });
   const session = await stripe.json();
-  if (!stripe.ok || !session.url) return reply({ error: 'Could not start checkout.' }, 502);
+  if (!stripe.ok || !session.url) {
+    console.error(JSON.stringify({ event: 'checkout_failed', provider: 'stripe', status: stripe.status, code: session?.error?.code, message: session?.error?.message }));
+    return reply({ error: `Stripe: ${session?.error?.message ?? 'could not start checkout.'}` }, 502);
+  }
   return reply({ url: session.url });
 }
 
 async function razorpay(user: { id: string; email?: string }): Promise<Response> {
   const keyId = Deno.env.get('RAZORPAY_KEY_ID');
   const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
-  if (!keyId || !keySecret) return reply({ error: 'Razorpay is not set up.' }, 501);
+  if (!keyId || !keySecret) {
+    console.error(JSON.stringify({ event: 'checkout_failed', provider: 'razorpay', message: 'RAZORPAY_KEY_ID / RAZORPAY_KEY_SECRET secret missing' }));
+    return reply({ error: 'Razorpay is not set up.' }, 501);
+  }
 
   const response = await fetch('https://api.razorpay.com/v1/payment_links', {
     method: 'POST',
@@ -63,7 +69,11 @@ async function razorpay(user: { id: string; email?: string }): Promise<Response>
       callback_method: 'get',
     }),
   });
-  const link = await response.json();
-  if (!response.ok || !link.short_url) return reply({ error: 'Could not start checkout.' }, 502);
+  const link = await response.json().catch(() => ({}));
+  if (!response.ok || !link.short_url) {
+    // Razorpay's own description (e.g. "Authentication failed", "callback_url invalid") is safe to show and is the fastest diagnosis.
+    console.error(JSON.stringify({ event: 'checkout_failed', provider: 'razorpay', status: response.status, code: link?.error?.code, field: link?.error?.field, message: link?.error?.description }));
+    return reply({ error: `Razorpay: ${link?.error?.description ?? `could not start checkout (HTTP ${response.status}).`}` }, 502);
+  }
   return reply({ url: link.short_url });
 }

@@ -82,9 +82,16 @@ test.describe('application tracker', () => {
     expect(page.rows).toHaveLength(1);
   });
 
-  test('shows the plan on the account page (development build is unlimited)', async ({ fillie }) => {
+  test('shows the plan on the account page', async ({ fillie }) => {
     await openApp(fillie, '#/account');
-    await expect(fillie.control.locator('.banner')).toContainText(/Cloud is not set up/i, { timeout: 15_000 });
+    // Works with or without real cloud keys: the plan card is always there, and
+    // signed-out users see provider-branded sign-in buttons when the cloud is configured.
+    await expect(fillie.control.locator('.hero-card')).toBeVisible({ timeout: 15_000 });
+    const configured = (await fillie.control.locator('.banner').filter({ hasText: /Cloud is not set up/i }).count()) === 0;
+    if (configured) {
+      await expect(fillie.control.locator('.oauth-btn')).toHaveCount(3);
+      await expect(fillie.control.locator('.oauth-google')).toContainText('Continue with Google');
+    }
   });
 });
 

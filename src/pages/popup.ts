@@ -30,17 +30,30 @@ function render(state: {
   const status = state.status;
   const provider = PROVIDER_PRESETS.find((preset) => preset.id === (status?.provider ?? 'groq'));
 
+  const access = status?.access;
+  const email = access?.signedIn ? access.email ?? '' : '';
+  const account = access
+    ? email
+      ? html`
+          <button class="pop-user" data-action="open-account" type="button" title="${escapeHtml(email)}">
+            <span class="pop-avatar" aria-hidden="true">${escapeHtml(email.charAt(0).toUpperCase())}</span>
+            <span class="pop-user-text">
+              <strong>${escapeHtml(email)}</strong>
+              <span>${access.plan === 'paid' ? 'Unlocked' : `${access.remaining} free left this week`}</span>
+            </span>
+          </button>
+        `
+      : html`<button class="pop-signin" data-action="open-account" type="button">Sign in</button>`
+    : '';
+
   const header = html`
     <header class="pop-head">
       <div class="pop-brand">
         <span class="pop-mark" aria-hidden="true"></span>
-        <div class="pop-brand-text">
-          <strong>Fillie</strong>
-          <span class="ff-meta">Personal form assistant</span>
-        </div>
+        <strong class="pop-name">Fillie</strong>
       </div>
-      <button class="ff-btn ff-btn-ghost ff-btn-sm" data-action="open-app" type="button">
-        Open Fillie
+      ${account}
+      <button class="ff-btn ff-btn-ghost ff-btn-icon ff-btn-sm" data-action="open-app" type="button" aria-label="Open Fillie" title="Open Fillie">
         <span data-icon="external"></span>
       </button>
     </header>
@@ -108,9 +121,7 @@ function render(state: {
           <span class="ff-status-dot"></span>
           ${status.aiConfigured ? `Ready · ${escapeHtml(provider?.label ?? 'AI')}` : 'Profile only'}
         </span>
-        ${status.access
-          ? html`<span class="pop-plan" data-plan="${status.access.plan}">${status.access.plan === 'paid' ? 'Unlocked' : `${status.access.remaining} free left`}</span>`
-          : html`<span class="ff-meta">${status.profileCompleteness}% profile</span>`}
+        <span class="ff-meta">${status.profileCompleteness}% profile</span>
       </div>
 
       <button class="pop-cta" data-action="run" type="button" ${state.pageOk ? '' : 'disabled'}>
@@ -265,6 +276,7 @@ app.addEventListener('click', async (event) => {
   if (action === 'open-profile') return void openApp('#/profile/personal');
   if (action === 'open-memory') return void openApp('#/memory');
   if (action === 'open-database') return void openApp('#/database');
+  if (action === 'open-account') return void openApp('#/account');
   if (action === 'open-settings') return void openApp('#/settings/ai');
   if (action === 'run') {
     const tab = await activeTab();

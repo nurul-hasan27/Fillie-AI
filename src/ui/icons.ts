@@ -1,3 +1,4 @@
+import { LOGO_DATA_URL } from './logo-data';
 /**
  * Inline SVG icon set — one consistent stroke weight (1.5), one grid (16px),
  * no emoji, no external icon dependency.
@@ -117,17 +118,12 @@ export function icon(name: IconName, options: IconOptions = {}): SVGSVGElement {
 }
 
 /** Brand mark: a document with a sparkle — readable down to 16px. */
-export function brandMark(size = 24, color = 'currentColor'): SVGSVGElement {
+export function brandMark(size = 24, _color = 'currentColor'): SVGSVGElement {
   const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-  svg.setAttribute('viewBox', '0 0 32 32');
+  svg.setAttribute('viewBox', '0 0 48 48');
   svg.setAttribute('width', String(size));
   svg.setAttribute('height', String(size));
-  svg.setAttribute('fill', 'none');
   svg.setAttribute('aria-hidden', 'true');
-  svg.innerHTML = `
-    <rect x="5.5" y="3.5" width="16" height="21" rx="4.2" fill="var(--ff-accent-soft)" stroke="${color}" stroke-width="1.6"/>
-    <path d="M10 10.5h7M10 15h7" stroke="${color}" stroke-width="1.6" stroke-linecap="round" opacity=".55"/>
-    <path d="M22.4 15.2l1.02 2.56 2.56 1.02-2.56 1.02-1.02 2.56-1.02-2.56-2.56-1.02 2.56-1.02 1.02-2.56Z" fill="var(--ff-accent)" stroke="none"/>
-  `;
+  svg.innerHTML = `<image href="${LOGO_DATA_URL}" width="48" height="48"/>`;
   return svg;
 }

@@ -536,7 +536,10 @@ async function handleOAuth(provider: OAuthProvider) {
     await afterSignIn();
     return { ok: true };
   } catch (error) {
-    return authError(error);
+    // The most common setup mistake: this exact address is missing from Supabase's Redirect URLs.
+    const hint = ` Make sure ${identity.getRedirectURL()} is listed under Authentication > URL Configuration > Redirect URLs in Supabase.`;
+    const base = authError(error);
+    return /cancel|closed|did not approve/i.test(base.error) ? base : { ok: false as const, error: base.error + hint };
   }
 }
 
