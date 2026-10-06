@@ -36,35 +36,11 @@
 }
 
 .pop-mark {
-  width: 26px;
-  height: 26px;
-  border-radius: 8px;
-  background: var(--ff-midnight);
-  position: relative;
+  width: 30px;
+  height: 30px;
   flex: none;
-  box-shadow: var(--ff-shadow-xs);
-}
-
-.pop-mark::before {
-  content: '';
-  position: absolute;
-  inset: 7px 7px auto 7px;
-  height: 2px;
-  border-radius: 2px;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 5px 0 rgba(255, 255, 255, 0.55), 0 10px 0 rgba(255, 255, 255, 0.35);
-}
-
-.pop-mark::after {
-  content: '';
-  position: absolute;
-  right: 4px;
-  bottom: 4px;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #fff;
-  box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.28);
+  border-radius: 9px;
+  background: url('../assets/icon-48.png') center / contain no-repeat;
 }
 
 .pop-brand-text {
@@ -294,4 +270,155 @@
 .pop-plan[data-plan='paid'] {
   background: var(--ff-midnight);
   color: #fff;
+}
+
+/* ==========================================================================
+   Popup theme: cream paper and the deep green of the Fillie icon.
+   Scoped to the popup, so the app and the on-page panel keep their own look.
+   ========================================================================== */
+
+.popup-body {
+  --ff-bg: #fbf7ec;
+  --ff-bg-subtle: #f4eedd;
+  --ff-surface: #fffdf6;
+  --ff-surface-sunken: #f4eedd;
+  --ff-border: rgba(20, 60, 40, 0.13);
+  --ff-border-strong: rgba(20, 60, 40, 0.24);
+  --ff-accent: #14573a;
+  --ff-accent-hover: #0f4630;
+  --ff-accent-active: #0b3624;
+  --ff-accent-soft: #e3efe4;
+  --ff-accent-border: #b5d3bd;
+  --ff-ring: 0 0 0 3px rgba(20, 87, 58, 0.22);
+}
+
+:root[data-theme='dark'] .popup-body {
+  --ff-bg: #101a14;
+  --ff-bg-subtle: #14201a;
+  --ff-surface: #17251d;
+  --ff-surface-sunken: #0d1511;
+  --ff-border: rgba(180, 230, 200, 0.14);
+  --ff-border-strong: rgba(180, 230, 200, 0.26);
+  --ff-accent: #5fcf94;
+  --ff-accent-hover: #7fdba9;
+  --ff-accent-soft: #163626;
+  --ff-accent-border: #28583c;
+  --ff-on-accent: #06180f;
+}
+
+.pop-head {
+  background: linear-gradient(180deg, #fffdf6 0%, #f7f0dc 100%);
+  gap: var(--ff-space-2);
+}
+
+:root[data-theme='dark'] .pop-head {
+  background: var(--ff-surface);
+}
+
+.pop-brand {
+  gap: 8px;
+}
+
+.pop-mark {
+  width: 32px;
+  height: 32px;
+}
+
+.pop-name {
+  font-family: var(--ff-font-serif);
+  font-size: 20px;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+}
+
+.pop-user,
+.pop-signin {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  max-width: 190px;
+  padding: 3px 10px 3px 3px;
+  border: 1px solid var(--ff-border-strong);
+  border-radius: var(--ff-radius-pill);
+  background: var(--ff-surface);
+  color: var(--ff-text);
+  font: inherit;
+  cursor: pointer;
+  text-align: left;
+  transition: transform var(--ff-duration-fast) var(--ff-ease), border-color var(--ff-duration-fast) var(--ff-ease);
+}
+
+.pop-signin {
+  padding: 6px 14px;
+  background: var(--ff-accent);
+  border-color: var(--ff-accent);
+  color: var(--ff-on-accent);
+  font-weight: 600;
+  font-size: var(--ff-text-sm);
+}
+
+.pop-user:hover,
+.pop-signin:hover {
+  transform: translateY(-1px);
+  border-color: var(--ff-accent);
+}
+
+.pop-avatar {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--ff-accent);
+  color: var(--ff-on-accent);
+  font-weight: 700;
+  font-size: 13px;
+}
+
+.pop-user-text {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.2;
+}
+
+.pop-user-text strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.pop-user-text span {
+  font-size: 10.5px;
+  color: var(--ff-text-secondary);
+}
+
+.pop-cta {
+  background: var(--ff-accent);
+  border-color: var(--ff-accent);
+  color: var(--ff-on-accent);
+}
+
+.pop-cta .ff-meta,
+.pop-cta .pop-cta-go {
+  color: color-mix(in srgb, var(--ff-on-accent) 78%, transparent);
+}
+
+.pop-cta-icon {
+  background: color-mix(in srgb, var(--ff-on-accent) 18%, transparent);
+  color: var(--ff-on-accent);
+}
+
+.pop-cta:hover:not(:disabled) {
+  background: var(--ff-accent-hover);
+}
+
+.pop-cta:disabled {
+  background: var(--ff-surface-sunken);
+  color: var(--ff-text-secondary);
 }

@@ -68,3 +68,18 @@ Upload `release/fillie-extension.zip` to the Chrome Web Store.
 - **Applications** are stored in the cloud and loaded 100 at a time when the Database page is opened. Signed-out rows wait on the device and upload after sign-in.
 - **The free-trial limit is a deterrent, not a lock.** The count is kept on the server against a hashed install id, a hashed hardware fingerprint (the same across browsers on one computer) and a hashed IP, so reinstalling, incognito and switching browser do not reset it. A determined person who edits the extension's code can still bypass any check that runs in their own browser; that is true of every browser extension.
 - **Privacy policy.** The Chrome Web Store requires a privacy policy that discloses: email (sign-in), the hashed device identifiers above (free-trial counting), and backed-up profile data. Say that API keys never leave the device.
+
+## Troubleshooting payments
+
+Both payment functions log one JSON line per problem (Supabase Dashboard → Edge Functions → the function → Logs). No keys or card data are ever logged.
+
+| Symptom | Log line | Usual cause |
+| --- | --- | --- |
+| The Razorpay button shows an error such as "Razorpay: Authentication failed" | `checkout_failed` (provider razorpay) | Wrong `RAZORPAY_KEY_ID` / `RAZORPAY_KEY_SECRET`, test key with live mode (or the reverse), or the account's KYC is not finished. The extension shows Razorpay's own message. |
+| "Razorpay is not set up" | `checkout_failed ... secret missing` | `RAZORPAY_KEY_ID` or `RAZORPAY_KEY_SECRET` secret missing. |
+| Payment succeeds but Fillie stays locked | `razorpay_webhook_rejected` | `RAZORPAY_WEBHOOK_SECRET` is not exactly the secret typed in Razorpay → Settings → Webhooks. |
+| Payment succeeds, no log line at all | (none) | The webhook is not saved in Razorpay, points at the wrong URL (`…/functions/v1/razorpay-webhook`), or is switched off. |
+| `razorpay_webhook_received` with another type | `type: payment.captured`, etc. | Tick **payment_link.paid** in the webhook's events. |
+| `payment_record_failed` | `step`, `code` | A database privilege or user problem; run `0003_table_grants.sql`. |
+
+After paying, open the Account page and press **I have paid** (or just come back to the tab; it re-checks automatically).

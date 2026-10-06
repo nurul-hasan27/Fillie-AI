@@ -1895,6 +1895,15 @@ async function runAuth(busy: string, call: () => Promise<unknown>): Promise<void
 /* Boot                                                                */
 /* ------------------------------------------------------------------ */
 
+// Coming back from a payment page: re-check the licence so the plan updates by itself.
+window.addEventListener('focus', () => {
+  if (state.route.kind !== 'account' || !state.account.status || state.account.status.access.plan === 'paid') return;
+  void (async () => {
+    state.account.status = await sendMessage<AccountStatus>({ type: 'fillie:refresh-payment', device: await computeHashes() });
+    render();
+  })().catch(() => undefined);
+});
+
 window.addEventListener('hashchange', () => {
   state.route = parseRoute();
   state.editingMemory = undefined;
