@@ -5,8 +5,8 @@
  * function secrets.
  */
 export const CLOUD = {
-  supabaseUrl: 'https://YOUR-PROJECT.supabase.co',
-  anonKey: 'YOUR-SUPABASE-ANON-KEY',
+  supabaseUrl: 'https://erhrkrcbcugckaczavsm.supabase.co',
+  anonKey: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImVyaHJrcmNiY3VnY2thY3phdnNtIiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTEyMzM1OTcsImV4cCI6MjEwNjgwOTU5N30.uvq5Zpa9NnM6KJWxPx012fjIpG42crXW_tHKDKUfXP4',
   /** Free form-fillings per calendar week before sign-in + payment is required. */
   freeFillsPerWeek: 3,
   priceLabel: '$5 one-time',
