@@ -12,21 +12,18 @@ Everything below uses free plans. Payment providers only take a small fee per pa
 5. Install the CLI (`npm i -g supabase`), then `supabase login` and `supabase link --project-ref <ref>`.
 
 ## B. Payments
-**Stripe**: create an account, copy the secret key. Add a webhook to `https://<ref>.supabase.co/functions/v1/stripe-webhook` for `checkout.session.completed`; copy its signing secret.
-**Razorpay**: complete KYC, create API keys (Settings → API Keys). Add a webhook to `https://<ref>.supabase.co/functions/v1/razorpay-webhook` for `payment_link.paid` with a secret you choose.
+**Razorpay** (the only payment provider): complete KYC, create API keys (Settings → API Keys). Add a webhook to `https://<ref>.supabase.co/functions/v1/razorpay-webhook` for `payment_link.paid` with a secret you choose.
 
 ## C. Deploy the server functions
 ```bash
 supabase secrets set TRIAL_SALT=$(openssl rand -hex 16)
 supabase secrets set SUCCESS_URL=https://<your-site>/ CANCEL_URL=https://<your-site>/
-supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_WEBHOOK_SECRET=whsec_...
-supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=44900
+supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=500 RAZORPAY_CURRENCY=USD
 supabase functions deploy trial
 supabase functions deploy create-checkout
-supabase functions deploy stripe-webhook --no-verify-jwt
 supabase functions deploy razorpay-webhook --no-verify-jwt
 ```
-Test with Stripe test keys and card `4242 4242 4242 4242` and Razorpay test mode first, then switch to live keys.
+Test in Razorpay test mode first, then switch to live keys. The $5 price needs International Payments enabled on your Razorpay account.
 
 ## D. Extension
 1. Put the Project URL and anon key in `src/core/cloud/config.ts`. Check `razorpayLabel` matches `RAZORPAY_AMOUNT_MINOR`.

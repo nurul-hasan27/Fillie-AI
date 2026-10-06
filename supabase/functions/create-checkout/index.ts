@@ -1,7 +1,7 @@
-// Starts a checkout for the one-time payment, with Stripe (card, $5) or Razorpay (UPI/cards/netbanking, INR).
+// Starts the one-time $5 checkout with Razorpay (a payment link).
 // Deploy with: supabase functions deploy create-checkout
-// Secrets: SUCCESS_URL, CANCEL_URL, STRIPE_SECRET_KEY,
-//          RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_AMOUNT_MINOR (paise, e.g. 44900), RAZORPAY_CURRENCY (default INR)
+// Secrets: SUCCESS_URL, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET,
+//          RAZORPAY_AMOUNT_MINOR (cents, default 500 = $5), RAZORPAY_CURRENCY (default USD)
 import { corsHeaders, reply } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
@@ -15,36 +15,8 @@ Deno.serve(async (req) => {
   if (!userResponse.ok) return reply({ error: 'Sign in first.' }, 401);
   const user = (await userResponse.json()) as { id: string; email?: string };
 
-  const body = (await req.json().catch(() => ({}))) as { provider?: string };
-  if (body.provider === 'razorpay') return razorpay(user);
-  return stripe(user);
+  return razorpay(user);
 });
-
-async function stripe(user: { id: string; email?: string }): Promise<Response> {
-  const form = new URLSearchParams({
-    mode: 'payment',
-    'line_items[0][quantity]': '1',
-    'line_items[0][price_data][currency]': 'usd',
-    'line_items[0][price_data][unit_amount]': '500',
-    'line_items[0][price_data][product_data][name]': 'Fillie: lifetime access',
-    client_reference_id: user.id,
-    success_url: Deno.env.get('SUCCESS_URL')!,
-    cancel_url: Deno.env.get('CANCEL_URL')!,
-  });
-  if (user.email) form.set('customer_email', user.email);
-
-  const stripe = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${Deno.env.get('STRIPE_SECRET_KEY')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: form,
-  });
-  const session = await stripe.json();
-  if (!stripe.ok || !session.url) {
-    console.error(JSON.stringify({ event: 'checkout_failed', provider: 'stripe', status: stripe.status, code: session?.error?.code, message: session?.error?.message }));
-    return reply({ error: `Stripe: ${session?.error?.message ?? 'could not start checkout.'}` }, 502);
-  }
-  return reply({ url: session.url });
-}
 
 async function razorpay(user: { id: string; email?: string }): Promise<Response> {
   const keyId = Deno.env.get('RAZORPAY_KEY_ID');
@@ -58,8 +30,8 @@ async function razorpay(user: { id: string; email?: string }): Promise<Response>
     method: 'POST',
     headers: { Authorization: `Basic ${btoa(`${keyId}:${keySecret}`)}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      amount: Number(Deno.env.get('RAZORPAY_AMOUNT_MINOR') ?? '44900'),
-      currency: Deno.env.get('RAZORPAY_CURRENCY') ?? 'INR',
+      amount: Number(Deno.env.get('RAZORPAY_AMOUNT_MINOR') ?? '500'),
+      currency: Deno.env.get('RAZORPAY_CURRENCY') ?? 'USD',
       description: 'Fillie: lifetime access',
       reference_id: `${user.id.slice(0, 8)}-${Date.now()}`,
       customer: user.email ? { email: user.email } : undefined,

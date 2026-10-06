@@ -493,7 +493,6 @@ async function handleAccountStatus(device: DeviceHashes): Promise<AccountStatus>
     access: await access.status(await deviceSignals(device)),
     pendingApplications: await applications.pendingCount(),
     priceLabel: CLOUD.priceLabel,
-    razorpayLabel: CLOUD.razorpayLabel,
     shareOffers: await readShareOffers(),
     lastBackupAt: await storage.read<number>(BACKUP_AT_KEY),
   };
@@ -612,9 +611,9 @@ async function handleOAuth(provider: OAuthProvider) {
   }
 }
 
-async function handleCheckout(provider: 'stripe' | 'razorpay') {
+async function handleCheckout() {
   try {
-    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: JSON.stringify({ provider }) });
+    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: '{}' });
     await (globalThis as { chrome?: typeof chrome }).chrome?.tabs?.create({ url });
     return { ok: true, url };
   } catch (error) {
@@ -801,7 +800,7 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
       await cloud.signOut();
       return { ok: true };
     case 'fillie:checkout':
-      return handleCheckout(message.provider);
+      return handleCheckout();
     case 'fillie:feedback':
       return handleFeedback(message);
     case 'fillie:set-share-offers':

@@ -1138,8 +1138,7 @@ app.addEventListener('click', async (event) => {
       await loadAccount();
       return;
     case 'checkout': {
-      const provider = (target.getAttribute('data-provider') as 'stripe' | 'razorpay') ?? 'stripe';
-      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:checkout', provider });
+      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:checkout' });
       if (!result.ok) toast(result.error ?? 'Could not start checkout.', 'danger');
       return;
     }

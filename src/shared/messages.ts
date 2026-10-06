@@ -109,7 +109,6 @@ export interface AccountStatus {
   /** Applications saved on this device, waiting to upload. */
   pendingApplications: number;
   priceLabel: string;
-  razorpayLabel: string;
   /** Whether the user lets their offers be used, anonymously, as success stories. */
   shareOffers: boolean;
   lastBackupAt?: number;
@@ -174,7 +173,7 @@ export type BackgroundMessage =
   | { type: 'fillie:auth-callback'; url: string }
   | { type: 'fillie:auth-popup'; url: string }
   | { type: 'fillie:sign-out' }
-  | { type: 'fillie:checkout'; provider: 'stripe' | 'razorpay' }
+  | { type: 'fillie:checkout' }
   | { type: 'fillie:feedback'; rating: number | null; kind: 'review' | 'bug' | 'idea'; message: string }
   | { type: 'fillie:set-share-offers'; value: boolean }
   | { type: 'fillie:report-quality'; filled: number; edited: number; device: DeviceHashes }

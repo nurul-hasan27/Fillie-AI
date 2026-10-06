@@ -43,7 +43,7 @@ function fakeDb(options: { denyTable?: string; deniedOp?: string } = {}) {
   return { client, payments, entitlements, calls };
 }
 
-const payment = { userId: 'user-1', provider: 'stripe' as const, ref: 'cs_test_1', amountMinor: 500, currency: 'usd' };
+const payment = { userId: 'user-1', provider: 'razorpay' as const, ref: 'plink_test_1', amountMinor: 500, currency: 'usd' };
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -51,8 +51,8 @@ describe('recordPayment', () => {
   it('records the payment and unlocks the right user', async () => {
     const db = fakeDb();
     expect(await recordPayment(db.client, payment)).toEqual({ ok: true });
-    expect(db.payments.get('cs_test_1')).toMatchObject({ user_id: 'user-1', amount_minor: 500, currency: 'USD', provider: 'stripe' });
-    expect(db.entitlements.get('user-1')).toMatchObject({ paid: true, provider: 'stripe', stripe_session: 'cs_test_1' });
+    expect(db.payments.get('plink_test_1')).toMatchObject({ user_id: 'user-1', amount_minor: 500, currency: 'USD', provider: 'razorpay' });
+    expect(db.entitlements.get('user-1')).toMatchObject({ paid: true, provider: 'razorpay' });
     expect(db.entitlements.size).toBe(1);
   });
 
@@ -66,12 +66,6 @@ describe('recordPayment', () => {
     expect(db.entitlements.get('user-1')?.paid_at).toBe(first);
   });
 
-  it('does not write the unlock for Razorpay with a Stripe session id', async () => {
-    const db = fakeDb();
-    await recordPayment(db.client, { ...payment, provider: 'razorpay', ref: 'pay_1', currency: 'inr', amountMinor: 42000 });
-    expect(db.entitlements.get('user-1')).toMatchObject({ provider: 'razorpay', stripe_session: null });
-  });
-
   it('names the exact operation and Postgres code when the table grant is missing', async () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     const db = fakeDb({ denyTable: 'payments' });
@@ -80,7 +74,7 @@ describe('recordPayment', () => {
     // Nothing is unlocked when the payment could not be recorded.
     expect(db.entitlements.size).toBe(0);
     const entry = JSON.parse(String(log.mock.calls[0][0]));
-    expect(entry).toMatchObject({ event: 'payment_record_failed', step: 'insert payments (on conflict do nothing)', code: '42501', ref: 'cs_test_1' });
+    expect(entry).toMatchObject({ event: 'payment_record_failed', step: 'insert payments (on conflict do nothing)', code: '42501', ref: 'plink_test_1' });
   });
 
   it('reports a failure to unlock separately from a failure to record', async () => {

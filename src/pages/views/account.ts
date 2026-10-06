@@ -36,8 +36,7 @@ function planCard(status: AccountStatus): TemplateResult {
         <div class="dots" aria-hidden="true">${dots}</div>
         <div class="row-wrap" style="margin-top:14px">
           ${access.signedIn
-            ? html`<button class="ff-btn ff-btn-primary ff-btn-lg" type="button" data-action="checkout" data-provider="stripe" ${status.cloudConfigured ? '' : 'disabled'}>Pay ${escapeHtml(priceLabel.replace(' one-time', ''))} by card</button>
-                   <button class="ff-btn ff-btn-secondary ff-btn-lg" type="button" data-action="checkout" data-provider="razorpay" ${status.cloudConfigured ? '' : 'disabled'}>UPI / cards · ${escapeHtml(status.razorpayLabel)}</button>
+            ? html`<button class="ff-btn ff-btn-primary ff-btn-lg" type="button" data-action="checkout" ${status.cloudConfigured ? '' : 'disabled'}>Unlock for ${escapeHtml(priceLabel.replace(' one-time', ''))}</button>
                    <button class="ff-btn ff-btn-ghost" type="button" data-action="refresh-payment">I have paid</button>`
             : html`<span class="hero-pill">Sign in below to unlock</span>`}
         </div>

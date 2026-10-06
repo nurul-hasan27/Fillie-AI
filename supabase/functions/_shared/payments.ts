@@ -19,7 +19,7 @@ export type RecordResult = { ok: true } | { ok: false; step: string; error: DbEr
 
 export interface PaymentInput {
   userId: string;
-  provider: 'stripe' | 'razorpay';
+  provider: 'razorpay';
   ref: string;
   amountMinor: number;
   currency: string;
@@ -74,7 +74,6 @@ export async function recordPayment(admin: AdminClient, payment: PaymentInput): 
     user_id: payment.userId,
     paid: true,
     paid_at: new Date().toISOString(),
-    stripe_session: payment.provider === 'stripe' ? payment.ref : null,
     provider: payment.provider,
   });
   if (error) return fail('upsert entitlements', error);
