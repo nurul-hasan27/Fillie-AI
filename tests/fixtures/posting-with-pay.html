@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Platform Engineer at Initech — Apply</title>
+    <meta name="description" content="Apply for a Backend Engineer role at Northwind, building distributed services in Go and Python." />
+    <style>
+      body { font-family: system-ui, sans-serif; margin: 0; padding: 32px; background: #f6f6f4; color: #1c1b1f; }
+      main { max-width: 700px; margin: 0 auto; background: #fff; padding: 28px; border-radius: 14px; border: 1px solid #e6e5e0; }
+      label { display: block; margin: 16px 0 4px; font-weight: 550; font-size: 14px; }
+      input, select, textarea { width: 100%; padding: 9px 10px; border: 1px solid #d5d4cd; border-radius: 8px; font: inherit; box-sizing: border-box; }
+      fieldset { border: 1px solid #e6e5e0; border-radius: 10px; margin: 20px 0; }
+      legend { font-weight: 600; padding: 0 6px; }
+      .row { display: flex; gap: 8px; align-items: center; margin: 6px 0; }
+      button { margin-top: 24px; padding: 12px 18px; border-radius: 9px; border: 0; background: #5b53d6; color: #fff; font: inherit; font-weight: 600; cursor: pointer; }
+      h2 { font-size: 15px; margin: 26px 0 4px; color: #5d5b66; text-transform: uppercase; letter-spacing: .05em; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>Platform Engineer</h1>
+      <p>Initech · Pune, India · Engineering</p>
+      <p>Compensation: CTC 8-12 LPA, depending on experience. This role has a 2 year service bond.</p>
+
+      <p>
+        About the role: You will build distributed services that handle millions of events a day.
+        Requirements: 2+ years of backend experience, strong Python or Go, PostgreSQL, and comfort with
+        Kubernetes. You will own services end to end, from design through to on-call.
+      </p>
+
+      <form id="apply" novalidate>
+        <h2>Personal</h2>
+
+        <label for="full-name">Full name</label>
+        <input id="full-name" name="fullName" type="text" required />
+
+        <label for="email">Email address</label>
+        <input id="email" name="email" type="email" required />
+
+        <label for="phone">Phone number</label>
+        <input id="phone" name="phone" type="tel" placeholder="+44 20 7946 0000" />
+
+        <label for="location">Current location</label>
+        <input id="location" name="location" type="text" />
+
+        <label for="dob">Date of birth</label>
+        <input id="dob" name="dob" type="date" />
+
+        <h2>Education</h2>
+
+        <label for="university">University</label>
+        <input id="university" name="university" type="text" />
+
+        <label for="degree">Highest degree</label>
+        <select id="degree" name="degree">
+          <option value="">Select</option>
+          <option value="btech">B.Tech</option>
+          <option value="bsc">BSc</option>
+          <option value="ba">BA</option>
+          <option value="ma">MA</option>
+          <option value="mtech">M.Tech</option>
+        </select>
+
+        <label for="cgpa">CGPA</label>
+        <input id="cgpa" name="cgpa" type="text" placeholder="Out of 10" />
+
+        <label for="grad-year">Graduation year</label>
+        <input id="grad-year" name="graduationYear" type="number" />
+
+        <h2>Experience</h2>
+
+        <fieldset>
+          <legend>Years of professional experience</legend>
+          <div class="row"><input id="years" name="years" type="number" style="width: 120px" /><span>Years</span></div>
+        </fieldset>
+
+        <fieldset>
+          <legend>Preferred work mode</legend>
+          <div class="row"><input type="radio" id="mode-remote" name="workMode" value="Remote" /><label for="mode-remote" style="margin:0;font-weight:400">Remote</label></div>
+          <div class="row"><input type="radio" id="mode-hybrid" name="workMode" value="Hybrid" /><label for="mode-hybrid" style="margin:0;font-weight:400">Hybrid</label></div>
+          <div class="row"><input type="radio" id="mode-onsite" name="workMode" value="On-site" /><label for="mode-onsite" style="margin:0;font-weight:400">On-site</label></div>
+        </fieldset>
+
+        <label for="skills">Which of these do you have hands-on experience with?</label>
+        <div class="row"><input type="checkbox" id="skill-python" name="skills" value="Python" /><label for="skill-python" style="margin:0;font-weight:400">Python</label></div>
+        <div class="row"><input type="checkbox" id="skill-go" name="skills" value="Go" /><label for="skill-go" style="margin:0;font-weight:400">Go</label></div>
+        <div class="row"><input type="checkbox" id="skill-k8s" name="skills" value="Kubernetes" /><label for="skill-k8s" style="margin:0;font-weight:400">Kubernetes</label></div>
+        <div class="row"><input type="checkbox" id="skill-rust" name="skills" value="Rust" /><label for="skill-rust" style="margin:0;font-weight:400">Rust</label></div>
+
+        <h2>Links</h2>
+
+        <label for="linkedin">LinkedIn profile URL</label>
+        <input id="linkedin" name="linkedin" type="url" placeholder="https://linkedin.com/in/…" />
+
+        <label for="github">GitHub profile URL</label>
+        <input id="github" name="github" type="url" placeholder="https://github.com/…" />
+
+        <label for="cover">Why do you want to work here?</label>
+        <textarea id="cover" name="coverLetter" rows="6"></textarea>
+
+        <label class="row" style="font-weight:400">
+          <input type="checkbox" id="consent" name="consent" style="width:auto" />
+          I agree to the privacy policy and to Northwind storing my application data.
+        </label>
+
+        <button type="submit" id="submit">Submit application</button>
+      </form>
+      <p id="result" hidden></p>
+    </main>
+
+    <script>
+      document.getElementById('apply').addEventListener('submit', (event) => {
+        event.preventDefault();
+        const result = document.getElementById('result');
+        result.hidden = false;
+        result.textContent = 'Application submitted (fixture).';
+        window.__fillieSubmitted = true;
+      });
+    </script>
+  </body>
+</html>

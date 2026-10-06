@@ -229,3 +229,78 @@ test.describe('sign-in popup', () => {
     expect(reply.ok).toBe(false);
   });
 });
+
+test.describe('a form you fill is tracked straight away', () => {
+  type Rows = { rows: Array<{ company: string; role: string; status: string; offeredCtc: string; notes: string[] }> };
+  const rows = (fillie: Fixtures) => fillie.sendToWorker<Rows>({ type: 'fillie:apps-list', query: {} });
+
+  test('shows up in the database as soon as Fillie fills it, without pressing submit, with the pay the posting states', async ({ fillie }) => {
+    await fillie.seedProfile(PROFILE);
+    const page = await fillie.open('/posting-with-pay.html');
+    await runFillieOn(page, fillie);
+    await waitForResults(page);
+    await expect(page.locator('#email')).toHaveValue('ada@example.com', { timeout: 30_000 });
+    // Note: the submit button is never pressed.
+
+    await expect.poll(async () => (await rows(fillie)).rows.length, { timeout: 20_000 }).toBe(1);
+    const { rows: tracked } = await rows(fillie);
+    // Role and company are read from the page, not guessed from a sentence in the body.
+    expect(tracked[0]).toMatchObject({ status: 'applied', company: 'Initech', role: 'Platform Engineer' });
+    expect(tracked[0].offeredCtc).toContain('8-12 LPA');
+    expect(tracked[0].notes).toContain('2 year bond');
+  });
+
+  test('saves no pay when the posting does not state one (nothing is guessed)', async ({ fillie }) => {
+    await fillie.seedProfile(PROFILE);
+    const page = await fillie.open('/posting-without-pay.html');
+    await runFillieOn(page, fillie);
+    await waitForResults(page);
+
+    await expect.poll(async () => (await rows(fillie)).rows.length, { timeout: 20_000 }).toBe(1);
+    expect((await rows(fillie)).rows[0].offeredCtc).toBe('');
+  });
+
+  test('filling the same page again does not add a second row, and the popup numbers count it', async ({ fillie }) => {
+    await fillie.seedProfile(PROFILE);
+    const first = await fillie.open('/posting-with-pay.html');
+    await runFillieOn(first, fillie);
+    await waitForResults(first);
+    await expect.poll(async () => (await rows(fillie)).rows.length, { timeout: 20_000 }).toBe(1);
+
+    const second = await fillie.open('/posting-with-pay.html');
+    await runFillieOn(second, fillie);
+    await waitForResults(second);
+    await second.waitForTimeout(1500);
+    expect((await rows(fillie)).rows).toHaveLength(1);
+
+    await fillie.sendToWorker({
+      type: 'fillie:apps-save',
+      app: { ...(await rows(fillie)).rows[0], status: 'interview', interviewAt: new Date(Date.now() + 26 * 3_600_000).toISOString().slice(0, 16) },
+    });
+    const summary = await fillie.sendToWorker<{ total: number; counts: Record<string, number>; upcoming: Array<{ company: string }> }>({ type: 'fillie:apps-summary' });
+    expect(summary.total).toBe(1);
+    expect(summary.counts.interview).toBe(1);
+    expect(summary.upcoming).toHaveLength(1);
+  });
+
+  test('the popup leads with the total, the interviews and a quiet footer', async ({ fillie }) => {
+    await fillie.sendToWorker({
+      type: 'fillie:apps-save',
+      app: {
+        id: 'p1', company: 'Initech', role: 'Platform Engineer', status: 'interview', interviewAt: new Date(Date.now() + 30 * 3_600_000).toISOString().slice(0, 16),
+        offerLpa: null, offeredCtc: '', appliedAt: '2026-10-01', notes: [], rating: null, ratingSource: null, url: '', host: '', resumeName: '', updatedAt: 1,
+      },
+    });
+    const popup = await fillie.context.newPage();
+    await popup.goto(`chrome-extension://${fillie.extensionId}/pages/popup.html`);
+    await expect(popup.locator('.pop-total')).toContainText('1', { timeout: 20_000 });
+    await expect(popup.locator('.pop-total')).toContainText('form filled');
+    await expect(popup.locator('.pop-chip-interview b')).toHaveText('1');
+    await expect(popup.locator('.pop-interview').first()).toContainText('Initech');
+    // The AI status and the shortcut are now small, at the bottom.
+    const order = await popup.evaluate(() => [...document.querySelectorAll('.pop-body > *')].map((el) => el.className.split(' ')[0]));
+    expect(order.slice(0, 2)).toEqual(['pop-summary', 'pop-upcoming']);
+    expect(order[order.length - 1]).toBe('pop-foot');
+    await expect(popup.locator('.pop-foot')).toContainText('⌥⇧F');
+  });
+});

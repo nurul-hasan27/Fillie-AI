@@ -185,7 +185,8 @@ export type BackgroundMessage =
   | { type: 'fillie:apps-list'; query: ApplicationsRequest }
   | { type: 'fillie:apps-save'; app: Application }
   | { type: 'fillie:apps-delete'; id: string }
-  | { type: 'fillie:apps-track'; context: ApplicationContext; resumeId?: string }
+  | { type: 'fillie:apps-summary' }
+  | { type: 'fillie:apps-track'; context: ApplicationContext; resumeId?: string; /** The page's readable text and the form's questions, for reading details such as the pay. */ formText?: string }
   | { type: 'fillie:get-memory' }
   | { type: 'fillie:save-memory'; memory: LearnedAnswer[] }
   | { type: 'fillie:report-session'; url: string; stats: SessionStats; aiCalls?: number }

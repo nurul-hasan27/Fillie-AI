@@ -1716,6 +1716,7 @@ function readEditor(form: HTMLFormElement, base: Application): Application {
     status,
     interviewAt: String(data.get('interviewAt') ?? '') || null,
     offerLpa: lpa === '' ? null : Number(lpa),
+    offeredCtc: String(data.get('offeredCtc') ?? '').trim(),
     appliedAt: String(data.get('appliedAt') ?? '') || base.appliedAt,
     notes: String(data.get('notes') ?? '').split('\n'),
     rating,

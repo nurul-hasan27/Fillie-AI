@@ -26,6 +26,7 @@ interface Row {
   url: string;
   host: string;
   resume_name: string;
+  offered_ctc: string;
   updated_at: number;
 }
 
@@ -34,6 +35,16 @@ export interface ApplicationQuery {
   limit?: number;
   search?: string;
   status?: ApplicationStatus | 'all';
+}
+
+/** What the popup shows at a glance: how many forms, where they stand, and the next interviews. */
+export interface TrackerSummary {
+  total: number;
+  counts: Record<ApplicationStatus, number>;
+  /** Scheduled interviews that have not happened yet, soonest first. */
+  upcoming: Array<{ id: string; company: string; role: string; resumeName: string; interviewAt: string }>;
+  /** True when these numbers come only from this device. */
+  localOnly: boolean;
 }
 
 export interface ApplicationPage {
@@ -66,6 +77,7 @@ export function newApplication(input: Partial<Application> & { company: string; 
     url: input.url ?? '',
     host: input.host ?? '',
     resumeName: (input.resumeName ?? '').trim().slice(0, 80),
+    offeredCtc: (input.offeredCtc ?? '').trim().slice(0, 80),
     updatedAt: now,
   };
 }
@@ -85,6 +97,7 @@ export function normalizeApplication(app: Application): Application {
     rating: clampRating(app.rating),
     ratingSource: clampRating(app.rating) ? app.ratingSource : null,
     notes: app.notes.map((n) => n.trim()).filter(Boolean).slice(0, 8),
+    offeredCtc: (app.offeredCtc ?? '').trim().slice(0, 80),
     updatedAt: Date.now(),
   };
 }
@@ -104,6 +117,7 @@ const toRow = (app: Application, userId: string): Row & { user_id: string } => (
   url: app.url,
   host: app.host,
   resume_name: app.resumeName,
+  offered_ctc: app.offeredCtc,
   updated_at: app.updatedAt,
 });
 
@@ -121,6 +135,7 @@ const fromRow = (row: Row): Application => ({
   url: row.url ?? '',
   host: row.host ?? '',
   resumeName: row.resume_name ?? '',
+  offeredCtc: row.offered_ctc ?? '',
   updatedAt: Number(row.updated_at),
 });
 
@@ -150,15 +165,36 @@ export class ApplicationStore {
   /** Creates the application unless the same company + role is already tracked. */
   async track(
     draft: Partial<Application> & { company: string; role: string },
-    /** Only called for a new application (it may be slow, e.g. an AI call). */
+    /** Only called for a new application (it may be slow, e.g. an AI call). May refine the company and role. */
     enrich?: () => Promise<Partial<Application>>,
   ): Promise<{ app: Application; created: boolean }> {
-    const key = applicationKey(draft.company, draft.role, draft.resumeName);
-    const existing = await this.findByKey(key);
-    if (existing) return { app: existing, created: false };
-    const app = newApplication({ ...draft, ...(enrich ? await enrich() : {}) });
+    // The same page, or the same company and role, is the same application however often it is filled.
+    const known = (await this.findByUrl(draft.url)) ?? (await this.findByKey(applicationKey(draft.company, draft.role, draft.resumeName)));
+    if (known) return { app: known, created: false };
+
+    const merged = { ...draft, ...(enrich ? await enrich() : {}) } as Partial<Application> & { company: string; role: string };
+    // Reading the whole form may have named the company or role differently; check again before adding a copy.
+    const sameAsMerged = applicationKey(merged.company, merged.role, merged.resumeName);
+    if (sameAsMerged !== applicationKey(draft.company, draft.role, draft.resumeName)) {
+      const again = await this.findByKey(sameAsMerged);
+      if (again) return { app: again, created: false };
+    }
+    const app = newApplication(merged);
     await this.save(app);
     return { app, created: true };
+  }
+
+  private async findByUrl(url: string | undefined): Promise<Application | undefined> {
+    if (!url) return undefined;
+    const local = (await this.readLocal()).find((row) => sameUrl(row.url, url));
+    if (local) return local;
+    if (!(await this.client.getSession())) return undefined;
+    try {
+      const rows = await this.client.json<Row[]>(`/rest/v1/applications?select=*&url=eq.${encodeURIComponent(url)}&limit=1`);
+      return rows[0] ? fromRow(rows[0]) : undefined;
+    } catch {
+      return undefined;
+    }
   }
 
   private async findByKey(key: string): Promise<Application | undefined> {
@@ -230,6 +266,43 @@ export class ApplicationStore {
     }
   }
 
+  /**
+   * Counts and the upcoming interviews, from the cloud when signed in (plus anything still
+   * waiting on this device), otherwise from this device.
+   */
+  async summary(now = Date.now()): Promise<TrackerSummary> {
+    const byId = new Map<string, Pick<Application, 'id' | 'company' | 'role' | 'resumeName' | 'status' | 'interviewAt'>>();
+    let localOnly = true;
+    if (await this.client.getSession()) {
+      try {
+        const rows = await this.client.json<Row[]>(
+          '/rest/v1/applications?select=id,company,role,resume_name,status,interview_at&order=applied_at.desc&limit=2000',
+          {},
+          { timeoutMs: 6000 },
+        );
+        for (const row of rows) byId.set(row.id, { id: row.id, company: row.company, role: row.role, resumeName: row.resume_name ?? '', status: row.status, interviewAt: row.interview_at });
+        localOnly = false;
+      } catch {
+        /* offline: fall back to this device */
+      }
+    }
+    for (const row of await this.readLocal()) byId.set(row.id, row);
+
+    const counts: Record<ApplicationStatus, number> = { applied: 0, interview: 0, offer: 0, rejected: 0 };
+    const upcoming: TrackerSummary['upcoming'] = [];
+    for (const row of byId.values()) {
+      if (row.status in counts) counts[row.status] += 1;
+      if (row.status !== 'interview' || !row.interviewAt) continue;
+      const when = new Date(row.interviewAt).getTime();
+      // A short grace period, so an interview that has just started still shows.
+      if (Number.isFinite(when) && when >= now - 30 * 60 * 1000) {
+        upcoming.push({ id: row.id, company: row.company, role: row.role, resumeName: row.resumeName, interviewAt: row.interviewAt });
+      }
+    }
+    upcoming.sort((a, b) => new Date(a.interviewAt).getTime() - new Date(b.interviewAt).getTime());
+    return { total: byId.size, counts, upcoming: upcoming.slice(0, 5), localOnly };
+  }
+
   async list(query: ApplicationQuery = {}): Promise<ApplicationPage> {
     const limit = query.limit ?? CLOUD.pageSize;
     const offset = query.offset ?? 0;
@@ -261,6 +334,21 @@ export class ApplicationStore {
       .sort((a, b) => b.appliedAt.localeCompare(a.appliedAt) || b.updatedAt - a.updatedAt);
     return { rows: all.slice(offset, offset + limit), hasMore: all.length > offset + limit, localOnly: true };
   }
+}
+
+/** Same page, ignoring the #fragment and tracking parameters. */
+export function sameUrl(a: string, b: string): boolean {
+  const norm = (value: string) => {
+    try {
+      const url = new URL(value);
+      for (const key of [...url.searchParams.keys()]) if (/^(utm_|fbclid|gclid|ref$)/i.test(key)) url.searchParams.delete(key);
+      url.hash = '';
+      return `${url.origin}${url.pathname.replace(/\/+$/, '')}${url.search}`.toLowerCase();
+    } catch {
+      return value;
+    }
+  };
+  return Boolean(a) && Boolean(b) && norm(a) === norm(b);
 }
 
 /** Escapes characters that are wildcards in a PostgREST `ilike` pattern. */

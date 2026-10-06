@@ -20,7 +20,7 @@ import { ApplicationStore } from '../core/cloud/applications';
 import { BackupService } from '../core/cloud/backup';
 import { CLOUD, isCloudConfigured } from '../core/cloud/config';
 import type { DeviceSignals, OAuthProvider } from '../core/cloud/types';
-import { suggestIntel } from '../core/engine/intel';
+import { extractDetails } from '../core/engine/intel';
 import { createAuthWindow, type WindowsApi } from './popup-window';
 import { createProvider } from '../core/ai/factory';
 import { buildProviderChain, FailoverProvider } from '../core/ai/chain';
@@ -644,18 +644,28 @@ async function handleRestoreNow() {
  * AI platform is configured, a short AI summary; a rating is only an AI guess
  * and stays editable.
  */
-async function handleTrack(context: ApplicationContext, resumeId?: string) {
-  const company = context.company?.trim() || context.host;
+async function handleTrack(context: ApplicationContext, resumeId?: string, formText = '') {
   const resumeName = await storage.getResumeName(resumeId);
-  // When the role cannot be read, the resume used is shown in its place.
-  const role = context.role?.trim() || (resumeName ? '' : context.pageTitle.slice(0, 120) || 'Application');
   const settings = await getSettings();
   const deps = await plannerDeps(settings);
+  const heuristicCompany = context.company?.trim() || context.host;
+  const heuristicRole = context.role?.trim() || '';
+  const base = { company: heuristicCompany, role: heuristicRole, url: context.url, host: context.host, resumeName };
+
   const { app, created } = await applications.track(
-    { company, role, url: context.url, host: context.host, resumeName },
+    base,
     async () => {
-      const intel = await suggestIntel(context, deps.send);
-      return { notes: intel.notes, rating: intel.rating, ratingSource: intel.rating ? 'ai' : null };
+      // The whole form goes to the model once, to read the details of this application.
+      const details = await extractDetails(context, formText, deps.send);
+      return {
+        company: details.company || heuristicCompany,
+        // When the role cannot be read, the resume used is shown in its place.
+        role: details.role || heuristicRole || (resumeName ? '' : context.pageTitle.slice(0, 120) || 'Application'),
+        offeredCtc: details.ctc,
+        notes: details.notes,
+        rating: details.rating,
+        ratingSource: details.rating ? ('ai' as const) : null,
+      };
     },
   );
   return { ok: true, created, app };
@@ -831,11 +841,13 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
       return applications.list(message.query satisfies ApplicationsRequest);
     case 'fillie:apps-save':
       return applications.save(message.app);
+    case 'fillie:apps-summary':
+      return applications.summary();
     case 'fillie:apps-delete':
       await applications.remove(message.id);
       return { ok: true };
     case 'fillie:apps-track':
-      return handleTrack(message.context, message.resumeId);
+      return handleTrack(message.context, message.resumeId, message.formText);
     case 'fillie:get-memory':
       return storage.getMemory();
     case 'fillie:save-memory':

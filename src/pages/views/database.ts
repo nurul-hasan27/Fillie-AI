@@ -63,6 +63,12 @@ function statusDetail(app: Application): TemplateResult | string {
   return '';
 }
 
+function ctcTag(app: Application): TemplateResult | string {
+  return app.offeredCtc
+    ? html`<span class="tag tag-green-line tag-ctc" title="Pay stated in the posting">💰 ${escapeHtml(app.offeredCtc)}</span>`
+    : '';
+}
+
 function row(app: Application): TemplateResult {
   return html`
     <article class="app-row" data-app-id="${escapeHtml(app.id)}" data-status="${app.status}">
@@ -77,6 +83,7 @@ function row(app: Application): TemplateResult {
       <div class="app-status">
         <button class="tag tag-${app.status}" type="button" data-action="edit-app" data-id="${escapeHtml(app.id)}" title="Change status">${STATUS_LABEL[app.status]}</button>
         ${statusDetail(app)}
+        ${ctcTag(app)}
       </div>
       <div class="app-meta">
         <span class="ff-meta">Applied ${escapeHtml(formatDate(app.appliedAt))}</span>
@@ -169,6 +176,8 @@ export function applicationEditor(app: Application, isNew: boolean): TemplateRes
             <input class="ff-input" id="af-interview" name="interviewAt" type="datetime-local" value="${escapeHtml(app.interviewAt ?? '')}" /></div>
           <div class="ff-field" data-only="offer"><label class="ff-field-label" for="af-offer">Package (LPA)</label>
             <input class="ff-input" id="af-offer" name="offerLpa" type="number" min="0" step="0.1" value="${app.offerLpa ?? ''}" placeholder="e.g. 12" /></div>
+          <div class="ff-field"><label class="ff-field-label" for="af-ctc">Offered CTC</label>
+            <input class="ff-input" id="af-ctc" name="offeredCtc" value="${escapeHtml(app.offeredCtc)}" maxlength="80" placeholder="e.g. 8-12 LPA (left empty if the posting does not say)" /></div>
           <div class="ff-field"><label class="ff-field-label" for="af-applied">Applied on</label>
             <input class="ff-input" id="af-applied" name="appliedAt" type="date" value="${escapeHtml(app.appliedAt)}" /></div>
           <div class="ff-field"><span class="ff-field-label">Your rating</span>
