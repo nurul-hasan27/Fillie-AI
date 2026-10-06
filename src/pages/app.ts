@@ -4,7 +4,6 @@ import type {
   AIProviderId,
   AISettings,
   DeepPartial,
-  DocumentItem,
   LearnedAnswer,
   ProfileSection,
   UserProfile,
@@ -125,7 +124,8 @@ function parseRoute(): Route {
   const [head, section] = hash.split('/');
 
   if (head === 'memory') return { kind: 'memory' };
-  if (head === 'resume') return { kind: 'resume' };
+  // The old Documents page was replaced by Resumes; keep old bookmarks working.
+  if (head === 'resume' || (head === 'profile' && section === 'documents') || head === 'documents') return { kind: 'resume' };
   if (head === 'database') return { kind: 'database' };
   if (head === 'account') return { kind: 'account' };
 
@@ -233,15 +233,18 @@ function sidebar(): TemplateResult {
 
       <nav class="side-group" aria-label="Profile sections">
         <span class="ff-label side-group-label">Profile</span>
-        ${PROFILE_SECTIONS.map((section) =>
-          link(`#/profile/${section.id}`, section.label, profileIcon(section.id), state.route.kind === 'profile' && state.route.section === section.id),
-        )}
+        ${PROFILE_SECTIONS.map((section) => {
+          const item = link(`#/profile/${section.id}`, section.label, profileIcon(section.id), state.route.kind === 'profile' && state.route.section === section.id);
+          // Resumes sit inside the Profile list, just before Preferences (where Documents used to be).
+          return section.id === 'preferences'
+            ? html`${link('#/resume', 'Resumes', 'upload', state.route.kind === 'resume')}${item}`
+            : item;
+        })}
       </nav>
 
       <nav class="side-group" aria-label="Other sections">
         <span class="ff-label side-group-label">Fillie</span>
         ${link('#/database', 'Database', 'layers', state.route.kind === 'database')}
-        ${link('#/resume', 'Resumes', 'upload', state.route.kind === 'resume')}
         ${link('#/memory', 'Memory', 'brain', state.route.kind === 'memory')}
         ${link('#/account', 'Account', 'user', state.route.kind === 'account')}
         ${SETTINGS_SECTIONS.map((section) =>
@@ -277,8 +280,6 @@ function profileIcon(section: string): Parameters<typeof icon>[0] {
       return 'trophy';
     case 'links':
       return 'link';
-    case 'documents':
-      return 'upload';
     default:
       return 'sliders';
   }
@@ -980,48 +981,6 @@ app.addEventListener('click', async (event) => {
       updateProfile((profile) => ({ ...profile, achievements: profile.achievements.filter((_, i) => i !== index) }));
       return;
     }
-    case 'upload-document-btn': {
-      const fileInput = app.querySelector<HTMLInputElement>('#doc-upload-file');
-      if (!fileInput?.files?.[0]) {
-        fileInput?.click();
-        return;
-      }
-      void handleFileInput(fileInput);
-      return;
-    }
-    case 'set-default-document': {
-      const id = target.getAttribute('data-id');
-      updateProfile((profile) => ({
-        ...profile,
-        documents: (profile.documents ?? []).map((d) => ({
-          ...d,
-          isDefault: d.id === id,
-        })),
-      }), { rerender: true });
-      toast('Default document updated');
-      return;
-    }
-    case 'download-document': {
-      const id = target.getAttribute('data-id');
-      const doc = (state.profile.documents ?? []).find((d) => d.id === id);
-      if (!doc || !doc.dataUrl) return toast('Document content not available', 'danger');
-      const anchor = document.createElement('a');
-      anchor.href = doc.dataUrl;
-      anchor.download = doc.fileName || `${doc.name}.pdf`;
-      anchor.click();
-      return;
-    }
-    case 'remove-document': {
-      const id = target.getAttribute('data-id');
-      if (!confirm('Delete this document?')) return;
-      updateProfile((profile) => ({
-        ...profile,
-        documents: (profile.documents ?? []).filter((d) => d.id !== id),
-      }), { rerender: true });
-      toast('Document removed');
-      return;
-    }
-
     case 'import-resume':
       navigate('#/settings/profile');
       window.setTimeout(() => app.querySelector<HTMLInputElement>('#resume-file')?.click(), 60);
@@ -1354,9 +1313,6 @@ function updateRepeaterItem(repeater: string, index: number, field: string, valu
       else if (repeater === 'schools') {
         if (!Array.isArray(next.education.schools)) next.education.schools = [];
         targetList = next.education.schools as unknown as Record<string, unknown>[];
-      } else if (repeater === 'documents') {
-        if (!Array.isArray(next.documents)) next.documents = [];
-        targetList = next.documents as unknown as Record<string, unknown>[];
       } else {
         return profile;
       }
@@ -1367,11 +1323,6 @@ function updateRepeaterItem(repeater: string, index: number, field: string, valu
         targetList[index][field] = value
           .split('\n')
           .map((line) => line.replace(/^[\s•*-]+/, '').trim())
-          .filter(Boolean);
-      } else if (repeater === 'documents' && field === 'keywords') {
-        targetList[index][field] = value
-          .split(/[,;\n]/)
-          .map((k) => k.trim().toLowerCase())
           .filter(Boolean);
       } else {
         targetList[index][field] = value;
@@ -1397,9 +1348,6 @@ function updateRepeaterItem(repeater: string, index: number, field: string, valu
         const schoolName = (repeaterItem.querySelector<HTMLInputElement>('input[name="schoolName"]')?.value ?? '').trim();
         const level = (repeaterItem.querySelector<HTMLInputElement>('input[name="level"]')?.value ?? '').trim();
         title.textContent = `${level ? `${level}: ` : ''}${schoolName || 'School / Institution'}`;
-      } else if (repeater === 'documents') {
-        const name = (repeaterItem.querySelector<HTMLInputElement>('input[name="name"]')?.value ?? '').trim();
-        title.textContent = name || 'Document';
       }
     }
   }
@@ -1417,9 +1365,7 @@ function updateListField(
       if (repeaterContext) {
         const next = structuredClone(profile);
         let list: Record<string, unknown>[] | undefined;
-        if (repeaterContext.repeater === 'documents') {
-          list = next.documents as unknown as Record<string, unknown>[];
-        } else if (repeaterContext.repeater === 'schools') {
+        if (repeaterContext.repeater === 'schools') {
           list = next.education.schools as unknown as Record<string, unknown>[];
         } else {
           list = (next as unknown as Record<string, Record<string, unknown>[]>)[repeaterContext.repeater];
@@ -1530,67 +1476,6 @@ function updateSettings(mutator: (settings: AISettings) => AISettings, options: 
 async function handleFileInput(input: HTMLInputElement): Promise<void> {
   const file = input.files?.[0];
   if (!file) return;
-
-  if (input.id === 'doc-upload-file') {
-    const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      const titleInput = app.querySelector<HTMLInputElement>('#doc-upload-name');
-      const categorySelect = app.querySelector<HTMLSelectElement>('#doc-upload-category');
-      const keywordsInput = app.querySelector<HTMLInputElement>('#doc-upload-keywords');
-
-      const fileName = file.name;
-      const baseName = fileName.replace(/\.[^/.]+$/, '');
-      const name = titleInput?.value.trim() || baseName;
-      const category = (categorySelect?.value as DocumentItem['category']) || 'resume';
-      const rawKeywords = keywordsInput?.value || '';
-      const parsedKeywords = rawKeywords
-        .split(/[,;\n]/)
-        .map((k) => k.trim().toLowerCase())
-        .filter(Boolean);
-
-      if (!parsedKeywords.includes(category)) parsedKeywords.push(category);
-      if (category === 'resume' && !parsedKeywords.includes('cv')) parsedKeywords.push('cv');
-
-      let textContent: string | undefined;
-      try {
-        if (file.type === 'text/plain' || file.name.endsWith('.txt')) {
-          textContent = await file.text();
-        } else if (file.name.endsWith('.pdf') || file.name.endsWith('.docx')) {
-          const extracted = await extractResume(file);
-          textContent = extracted.text?.slice(0, 10000);
-        }
-      } catch {
-        /* text extraction is optional */
-      }
-
-      const isFirst = (state.profile.documents ?? []).length === 0;
-      const newDoc: DocumentItem = {
-        id: newId('doc'),
-        name,
-        fileName,
-        fileType: file.type || 'application/octet-stream',
-        fileSize: file.size,
-        category,
-        keywords: parsedKeywords,
-        dataUrl,
-        textContent,
-        isDefault: isFirst,
-        updatedAt: Date.now(),
-      };
-
-      updateProfile(
-        (profile) => ({
-          ...profile,
-          documents: [...(profile.documents ?? []), newDoc],
-        }),
-        { rerender: true },
-      );
-      toast(`Document “${name}” uploaded`);
-    };
-    reader.readAsDataURL(file);
-    return;
-  }
 
   if (input.id === 'import-data') {
     try {

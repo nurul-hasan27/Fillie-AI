@@ -126,7 +126,7 @@ test.describe('resume choice', () => {
       .toBe('Backend');
   });
 
-  test('offers an uploaded document that is filed as a resume', async ({ fillie }) => {
+  test('turns a resume once uploaded under the old Documents page into a resume, so nothing is lost', async ({ fillie }) => {
     const profile = await fillie.sendToWorker<{ documents?: unknown[] }>({ type: 'fillie:get-profile' });
     await fillie.sendToWorker({
       type: 'fillie:save-profile',
@@ -135,12 +135,32 @@ test.describe('resume choice', () => {
         documents: [{ id: 'd1', name: 'Resume 2025', fileName: 'resume.pdf', fileType: 'application/pdf', fileSize: 1, keywords: [], category: 'resume', textContent: 'Python SQL', isDefault: true, updatedAt: 1 }],
       },
     });
+    const state = await fillie.sendToWorker<{ resumes: Array<{ id: string; name: string; text: string }>; defaultId: string }>({ type: 'fillie:get-resumes' });
+    expect(state.resumes).toHaveLength(1);
+    expect(state.resumes[0]).toMatchObject({ name: 'Resume 2025', text: 'Python SQL' });
+    expect(state.defaultId).toBe(state.resumes[0].id);
+
+    // Once the user has saved their own resumes, the old document no longer adds a second copy.
     await fillie.sendToWorker({ type: 'fillie:save-resumes', state: resumes });
-    const suggestion = await fillie.sendToWorker<{ options: Array<{ id: string; name: string }> }>({
+    const suggestion = await fillie.sendToWorker<{ options: Array<{ id: string }> }>({
       type: 'fillie:suggest-resume',
       context: { url: 'u', host: 'h', pageTitle: 'Job', detectedAt: 0 },
     });
-    expect(suggestion.options.map((o) => o.id).sort()).toEqual(['be', 'doc:d1', 'fe']);
+    expect(suggestion.options.map((o) => o.id).sort()).toEqual(['be', 'fe']);
+  });
+
+  test('the Documents page is gone; Resumes sits in the Profile list, and the old address still works', async ({ fillie }) => {
+    await openApp(fillie, '#/profile/personal');
+    const profileLinks = fillie.control.locator('nav[aria-label="Profile sections"] .side-link');
+    const labels = (await profileLinks.allInnerTexts()).map((t) => t.trim());
+    expect(labels).not.toContain('Documents');
+    expect(labels.indexOf('Resumes')).toBe(labels.indexOf('Preferences') - 1);
+    expect(labels.indexOf('Resumes')).toBeGreaterThan(labels.indexOf('Links'));
+    // And it is no longer listed under the Fillie group.
+    expect(await fillie.control.locator('nav[aria-label="Other sections"] .side-link', { hasText: 'Resumes' }).count()).toBe(0);
+
+    await openApp(fillie, '#/profile/documents');
+    await expect(fillie.control.locator('.topbar h1')).toHaveText('Resumes');
   });
 
   test('shows the resume used, in brackets and italics, when the role could not be read', async ({ fillie }) => {

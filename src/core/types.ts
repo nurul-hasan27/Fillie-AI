@@ -93,7 +93,6 @@ export type ProfileSection =
   | 'projects'
   | 'achievements'
   | 'links'
-  | 'documents'
   | 'preferences';
 
 export type AnswerSource =

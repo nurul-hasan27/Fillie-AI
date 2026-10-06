@@ -155,7 +155,14 @@ export class Storage {
     if (typeof legacy === 'string' && legacy.trim()) {
       return { resumes: [{ id: 'resume-main', name: 'Main', text: legacy, updatedAt: Date.now() }], defaultId: 'resume-main' };
     }
-    return { resumes: [], defaultId: '' };
+    // The old Documents page is gone. Any resume uploaded there, with readable text, becomes a
+    // resume here (and is kept for good the next time the user saves).
+    const documents = (await this.getProfile()).documents ?? [];
+    const imported = documents
+      .filter((doc) => doc.category === 'resume' && doc.textContent?.trim())
+      .map((doc) => ({ id: `doc:${doc.id}`, name: (doc.name || doc.fileName).slice(0, 40), text: doc.textContent as string, updatedAt: doc.updatedAt }));
+    const first = documents.find((doc) => doc.isDefault && imported.some((r) => r.id === `doc:${doc.id}`));
+    return { resumes: imported, defaultId: first ? `doc:${first.id}` : imported[0]?.id ?? '' };
   }
 
   async saveResumes(state: ResumesState): Promise<ResumesState> {
@@ -173,20 +180,9 @@ export class Storage {
     return next;
   }
 
-  /**
-   * Everything the user can pick as "the resume for this application": the
-   * named resumes plus any uploaded document filed as a resume that has
-   * readable text. Documents are offered under the id `doc:<id>`.
-   */
+  /** Everything the user can pick as "the resume for this application". */
   async getResumeChoices(): Promise<ResumesState> {
-    const state = await this.getResumes();
-    const documents = (await this.getProfile()).documents ?? [];
-    const fromDocuments = documents
-      .filter((doc) => doc.category === 'resume' && doc.textContent?.trim())
-      .map((doc) => ({ id: `doc:${doc.id}`, name: (doc.name || doc.fileName).slice(0, 40), text: doc.textContent as string, updatedAt: doc.updatedAt }));
-    const defaultDoc = documents.find((doc) => doc.isDefault && doc.category === 'resume' && doc.textContent?.trim());
-    const defaultId = state.defaultId || (defaultDoc ? `doc:${defaultDoc.id}` : fromDocuments[0]?.id ?? '');
-    return { resumes: [...state.resumes, ...fromDocuments], defaultId };
+    return this.getResumes();
   }
 
   /** Text of the resume with this id; '' for 'none', the default when omitted. */
