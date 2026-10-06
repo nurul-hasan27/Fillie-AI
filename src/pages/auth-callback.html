@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Signing in to Fillie</title>
+    <link rel="stylesheet" href="styles.css" />
+    <style>
+      body { display: grid; place-items: center; min-height: 100vh; margin: 0; text-align: center; }
+      .box { display: flex; flex-direction: column; align-items: center; gap: 14px; padding: 24px; }
+      .box img { width: 64px; height: 64px; border-radius: 16px; }
+      .box h1 { font-family: var(--ff-font-serif); font-weight: 500; font-size: 24px; letter-spacing: -0.02em; margin: 0; }
+      .box p { margin: 0; color: var(--ff-text-secondary); }
+    </style>
+  </head>
+  <body>
+    <main class="box">
+      <img src="../assets/icon-128.png" alt="" />
+      <h1 id="title">Signing you in…</h1>
+      <p id="note">This window closes by itself.</p>
+    </main>
+    <script type="module" src="auth-callback.js"></script>
+  </body>
+</html>
