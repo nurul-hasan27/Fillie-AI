@@ -432,13 +432,16 @@ test.describe('popup polish', () => {
     expect(await again.locator('.ai-nudge').count()).toBe(0);
   });
 
-  test('the popup is a rounded card with a shadow', async ({ fillie }) => {
+  test('the popup fills its window: no outer rectangle and no scrollbar', async ({ fillie }) => {
     const popup = await openPopup(fillie);
-    const style = await popup.evaluate(() => {
-      const card = getComputedStyle(document.querySelector('.popup') as HTMLElement);
-      return { radius: parseFloat(card.borderTopLeftRadius), shadow: card.boxShadow };
+    const m = await popup.evaluate(() => {
+      const card = document.querySelector('.popup') as HTMLElement;
+      const r = card.getBoundingClientRect();
+      return { left: r.left, top: r.top, overflowY: getComputedStyle(document.documentElement).overflowY, body: getComputedStyle(document.body).overflowY };
     });
-    expect(style.radius).toBeGreaterThanOrEqual(20);
-    expect(style.shadow).not.toBe('none');
+    expect(m.left).toBe(0);
+    expect(m.top).toBe(0);
+    expect(m.overflowY).toBe('hidden');
+    expect(m.body).toBe('hidden');
   });
 });

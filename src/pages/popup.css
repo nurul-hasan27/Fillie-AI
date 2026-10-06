@@ -950,3 +950,33 @@ html {
 @media (prefers-reduced-motion: reduce) {
   .popup[data-phase='enter'], .popup[data-phase='enter'] .rise { animation: none !important; }
 }
+
+/* Popup v3.1: no outer rectangle, no page scrollbar, lighter green */
+html,
+:root[data-theme='dark'] html,
+:root[data-theme='dark'] {
+  background: var(--ff-bg);
+  overflow: hidden;
+}
+
+.popup-body {
+  padding: 0;
+  overflow: hidden;
+}
+
+.popup {
+  border-radius: 0;
+  border: 0;
+  box-shadow: none;
+}
+
+.pop-head { border-radius: 0; }
+
+.pop-summary {
+  background: linear-gradient(160deg, #3f9a72 0%, #2f8461 100%);
+  box-shadow: 0 6px 18px rgba(47, 132, 97, 0.18);
+}
+
+:root[data-theme='dark'] .pop-summary {
+  background: linear-gradient(160deg, #2f8461 0%, #256b4e 100%);
+}
