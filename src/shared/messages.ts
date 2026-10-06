@@ -52,6 +52,8 @@ export interface PlanResponse {
   problems?: string[];
   profileCompleteness?: number;
   aiEnabled?: boolean;
+  /** True when at least one AI platform has a key and is switched on. */
+  aiReady?: boolean;
   error?: string;
 }
 
@@ -179,6 +181,7 @@ export type BackgroundMessage =
   | { type: 'fillie:set-share-offers'; value: boolean }
   | { type: 'fillie:report-quality'; filled: number; edited: number; device: DeviceHashes }
   | { type: 'fillie:open-account' }
+  | { type: 'fillie:open-app'; hash: string }
   | { type: 'fillie:refresh-payment'; device: DeviceHashes }
   | { type: 'fillie:backup-now' }
   | { type: 'fillie:restore-now' }

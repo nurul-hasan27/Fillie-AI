@@ -304,3 +304,141 @@ test.describe('a form you fill is tracked straight away', () => {
     await expect(popup.locator('.pop-foot')).toContainText('⌥⇧F');
   });
 });
+
+test.describe('popup polish', () => {
+  const when = (hours: number) => new Date(Date.now() + hours * 3_600_000).toISOString().slice(0, 16);
+  const interview = (n: number) => ({
+    id: `i${n}`, company: `Company ${n}`, role: 'Engineer', status: 'interview', interviewAt: when(10 + n * 5),
+    offerLpa: null, offeredCtc: '', appliedAt: '2026-10-01', notes: [], rating: null, ratingSource: null, url: '', host: '', resumeName: '', updatedAt: 1,
+  });
+  const openPopup = async (fillie: Fixtures) => {
+    const popup = await fillie.context.newPage();
+    await popup.goto(`chrome-extension://${fillie.extensionId}/pages/popup.html`);
+    await popup.waitForSelector('.pop-total', { timeout: 20_000 });
+    return popup;
+  };
+
+  test('opens with the saved numbers straight away, and trusts them for a minute without asking again', async ({ fillie }) => {
+    await fillie.sendToWorker({ type: 'fillie:apps-save', app: interview(1) });
+    const first = await openPopup(fillie);
+    await expect(first.locator('.pop-total b')).toHaveText('1');
+    await first.close();
+
+    // Plant a different number in the saved copy, as if it were the last thing the popup saw.
+    // If the popup asked the database again it would show 1; it must show the saved 7.
+    await fillie.control.evaluate(async () => {
+      const stored = await chrome.storage.local.get('fillie:popup-cache');
+      const cache = stored['fillie:popup-cache'];
+      cache.summary.total = 7;
+      cache.at = Date.now();
+      await chrome.storage.local.set({ 'fillie:popup-cache': cache, 'fillie:popup-dirty': 0 });
+    });
+    const second = await openPopup(fillie);
+    await expect(second.locator('.pop-total b')).toHaveText('7');
+    // It is there on the first paint: no placeholder digits, nothing counting.
+    expect(await second.locator('.pop-total b.skeleton').count()).toBe(0);
+    await second.close();
+
+    // Saving an application marks the saved numbers stale, so the next open shows the truth.
+    await fillie.sendToWorker({ type: 'fillie:apps-save', app: interview(2) });
+    const third = await openPopup(fillie);
+    await expect(third.locator('.pop-total b')).toHaveText('2', { timeout: 15_000 });
+  });
+
+  test('only the interview list scrolls, and only when there are more than two', async ({ fillie }) => {
+    await fillie.sendToWorker({ type: 'fillie:apps-save', app: interview(1) });
+    await fillie.sendToWorker({ type: 'fillie:apps-save', app: interview(2) });
+    const two = await openPopup(fillie);
+    await expect(two.locator('.pop-interview')).toHaveCount(2);
+    await expect(two.locator('.pop-interviews')).toHaveAttribute('data-scroll', 'false');
+    await two.close();
+
+    for (const n of [3, 4, 5]) await fillie.sendToWorker({ type: 'fillie:apps-save', app: interview(n) });
+    const five = await openPopup(fillie);
+    await expect(five.locator('.pop-interview')).toHaveCount(5);
+    const list = five.locator('.pop-interviews');
+    await expect(list).toHaveAttribute('data-scroll', 'true');
+    const metrics = await five.evaluate(() => {
+      const el = document.querySelector('.pop-interviews') as HTMLElement;
+      const top = (sel: string) => Math.round((document.querySelector(sel) as HTMLElement).getBoundingClientRect().top);
+      return { client: el.clientHeight, scroll: el.scrollHeight, cta: top('.pop-cta'), page: document.documentElement.scrollHeight - document.documentElement.clientHeight };
+    });
+    expect(metrics.scroll).toBeGreaterThan(metrics.client); // the list scrolls...
+    expect(metrics.client).toBeLessThanOrEqual(132); // ...inside a two-row window
+    expect(metrics.page).toBeLessThanOrEqual(1); // ...and the popup itself does not
+    // Scrolling the list leaves everything else where it was.
+    await list.evaluate((el) => (el.scrollTop = 80));
+    const ctaAfter = await five.evaluate(() => Math.round((document.querySelector('.pop-cta') as HTMLElement).getBoundingClientRect().top));
+    expect(ctaAfter).toBe(metrics.cta);
+  });
+
+  test('shows a crown and "Premium" quietly for premium users, and a small "Get premium" for everyone else', async ({ fillie }) => {
+    const free = await openPopup(fillie);
+    await expect(free.locator('.pop-getpremium')).toHaveText('Get premium');
+    expect(await free.locator('.pop-premium').count()).toBe(0);
+    expect(await free.locator('body').innerText()).not.toMatch(/unlocked/i);
+    await free.close();
+
+    await fillie.control.evaluate(async () => {
+      const stored = await chrome.storage.local.get('fillie:popup-cache');
+      const cache = stored['fillie:popup-cache'];
+      cache.status.access = { allowed: true, plan: 'paid', remaining: 3, limit: 3, signedIn: true, email: 'asha@example.com' };
+      cache.at = Date.now();
+      await chrome.storage.local.set({ 'fillie:popup-cache': cache, 'fillie:popup-dirty': 0 });
+    });
+    const paid = await openPopup(fillie);
+    await expect(paid.locator('.pop-premium')).toContainText('Premium');
+    await expect(paid.locator('.pop-premium svg.pop-crown')).toBeVisible();
+    expect(await paid.locator('.pop-getpremium').count()).toBe(0);
+    expect(await paid.locator('body').innerText()).not.toMatch(/unlocked/i);
+  });
+
+  test('offers free AI setup at the bottom when no AI is set up, and says "Ready" when one is', async ({ fillie }) => {
+    await fillie.seedProfile(PROFILE);
+    const popup = await openPopup(fillie);
+    const setup = popup.locator('.pop-foot .pop-setup-ai');
+    await expect(setup).toContainText("it's free");
+    expect(await popup.locator('.pop-foot').innerText()).not.toMatch(/gemini/i);
+
+    const [settings] = await Promise.all([fillie.context.waitForEvent('page'), setup.click()]);
+    await settings.waitForLoadState('domcontentloaded');
+    expect(settings.url()).toContain('/pages/app.html#/settings/ai');
+    await settings.close();
+    await popup.close();
+
+    await fillie.setAi({ enabled: true, scenario: 'valid' });
+    const ready = await openPopup(fillie);
+    await expect(ready.locator('.pop-foot')).toContainText('Ready', { timeout: 15_000 });
+    expect(await ready.locator('.pop-setup-ai').count()).toBe(0);
+  });
+
+  test('the on-page panel offers the free setup when Alt+Shift+F runs without AI, and not when AI is ready', async ({ fillie }) => {
+    await fillie.seedProfile(PROFILE);
+    const page = await fillie.open('/basic.html');
+    await runFillieOn(page, fillie);
+    await waitForResults(page);
+    const nudge = page.locator('.ai-nudge');
+    await expect(nudge).toContainText('free', { timeout: 20_000 });
+    const [settings] = await Promise.all([fillie.context.waitForEvent('page'), nudge.locator('[data-fillie-action="setup-ai"]').click()]);
+    await settings.waitForLoadState('domcontentloaded');
+    expect(settings.url()).toContain('#/settings/ai');
+    await settings.close();
+
+    await fillie.setAi({ enabled: true, scenario: 'valid' });
+    const again = await fillie.open('/basic.html');
+    await runFillieOn(again, fillie);
+    await waitForResults(again);
+    await again.waitForTimeout(1200);
+    expect(await again.locator('.ai-nudge').count()).toBe(0);
+  });
+
+  test('the popup is a rounded card with a shadow', async ({ fillie }) => {
+    const popup = await openPopup(fillie);
+    const style = await popup.evaluate(() => {
+      const card = getComputedStyle(document.querySelector('.popup') as HTMLElement);
+      return { radius: parseFloat(card.borderTopLeftRadius), shadow: card.boxShadow };
+    });
+    expect(style.radius).toBeGreaterThanOrEqual(20);
+    expect(style.shadow).not.toBe('none');
+  });
+});

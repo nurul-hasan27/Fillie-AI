@@ -300,7 +300,7 @@ export class ApplicationStore {
       }
     }
     upcoming.sort((a, b) => new Date(a.interviewAt).getTime() - new Date(b.interviewAt).getTime());
-    return { total: byId.size, counts, upcoming: upcoming.slice(0, 5), localOnly };
+    return { total: byId.size, counts, upcoming: upcoming.slice(0, 30), localOnly };
   }
 
   async list(query: ApplicationQuery = {}): Promise<ApplicationPage> {

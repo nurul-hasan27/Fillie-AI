@@ -767,3 +767,186 @@
   .pop-interview[data-soon='true'] .pop-when, .skeleton { animation: none !important; }
   * { transition-duration: 0.01ms !important; }
 }
+
+/* ==========================================================================
+   Popup v3: calmer motion, a floating card with depth, tidy header, free-AI nudge.
+   (Chrome draws the outer popup window itself; this card sits inside it.)
+   ========================================================================== */
+
+html {
+  background: #e8e2cf;
+}
+
+:root[data-theme='dark'] html,
+:root[data-theme='dark'] {
+  background: #08100c;
+}
+
+.popup-body {
+  width: 380px;
+  min-height: 0;
+  padding: 10px;
+  background: transparent;
+  overflow: hidden;
+}
+
+/* The popup itself: rounded, lifted, and it settles in */
+.popup {
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 24px;
+  background: var(--ff-bg);
+  border: 1px solid var(--ff-border);
+  box-shadow:
+    0 1px 2px rgba(20, 40, 28, 0.08),
+    0 8px 24px rgba(20, 40, 28, 0.14),
+    0 22px 48px rgba(20, 40, 28, 0.12);
+  animation: none;
+}
+
+:root[data-theme='dark'] .popup {
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.5),
+    0 10px 28px rgba(0, 0, 0, 0.5),
+    0 24px 52px rgba(0, 0, 0, 0.45);
+}
+
+@keyframes card-settle {
+  from { opacity: 0; transform: translateY(5px) scale(0.99); box-shadow: 0 1px 2px rgba(20, 40, 28, 0.04), 0 2px 6px rgba(20, 40, 28, 0.04); }
+  to { opacity: 1; transform: none; }
+}
+
+.popup[data-phase='enter'] {
+  animation: card-settle 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Gentle staggered entrance, only when the popup first opens */
+@keyframes soft-rise {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+
+.rise { animation: none; }
+.popup[data-phase='enter'] .rise {
+  animation: soft-rise 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: calc(var(--i, 0) * 35ms + 40ms);
+}
+
+/* Numbers and rows never animate on their own: updates must not look like glitches */
+.pop-chip,
+.pop-interview { animation: none !important; }
+.pop-interview[data-soon='true'] .pop-when { animation: none !important; }
+.pop-chip:hover { transform: translateY(-1px); }
+.pop-interview:hover { transform: none; background: color-mix(in srgb, var(--ff-bg-subtle) 80%, #ffb110 20%); }
+.pop-cta::before { display: none; }
+.pop-cta:hover:not(:disabled) { transform: none; box-shadow: 0 4px 14px rgba(15, 70, 48, 0.12); }
+.pop-viewall:hover { transform: none; }
+
+/* Header: account on the right, premium as a quiet detail */
+.pop-head { border-radius: 24px 24px 0 0; }
+
+.pop-head-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.pop-user {
+  max-width: 124px;
+  margin-left: 0;
+  padding: 3px 10px 3px 3px;
+}
+
+.pop-user-email {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11.5px;
+  font-weight: 600;
+}
+
+.pop-signin { margin-left: 0; padding: 5px 12px; }
+
+.pop-premium {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #8a6d1a;
+  font-size: 11.5px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.pop-crown { color: #c9a227; }
+
+:root[data-theme='dark'] .pop-premium { color: #e0b94a; }
+:root[data-theme='dark'] .pop-crown { color: #e0b94a; }
+
+.pop-getpremium {
+  padding: 3px 10px;
+  border: 1px solid #dcb94f;
+  border-radius: 999px;
+  background: #fff7dc;
+  color: #8a6d1a;
+  font: 600 11px var(--ff-font);
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.pop-getpremium:hover { background: #ffefba; border-color: #c9a227; }
+:root[data-theme='dark'] .pop-getpremium { background: rgba(224, 185, 74, 0.12); border-color: rgba(224, 185, 74, 0.5); color: #e0b94a; }
+
+.pop-ext {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ff-text-secondary);
+  cursor: pointer;
+  transition: background 0.2s ease;
+}
+
+.pop-ext:hover { background: var(--ff-bg-subtle); }
+
+/* Upcoming interviews: only this list scrolls, and only when there are more than two */
+.pop-interviews[data-scroll='true'] {
+  max-height: 128px; /* two rows and the gap between them */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-right: 4px;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--ff-text) 25%, transparent) transparent;
+}
+
+.pop-interviews[data-scroll='true']::-webkit-scrollbar { width: 5px; }
+.pop-interviews[data-scroll='true']::-webkit-scrollbar-thumb { background: color-mix(in srgb, var(--ff-text) 25%, transparent); border-radius: 999px; }
+.pop-interviews[data-scroll='true']::-webkit-scrollbar-track { background: transparent; }
+
+/* Footer: the free-AI setup button */
+.pop-setup-ai {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 4px 11px;
+  border: 1px solid var(--ff-accent-border);
+  border-radius: 999px;
+  background: var(--ff-accent-soft);
+  color: var(--ff-accent);
+  font: 600 11.5px var(--ff-font);
+  cursor: pointer;
+  transition: background 0.2s ease, border-color 0.2s ease;
+}
+
+.pop-setup-ai:hover { background: color-mix(in srgb, var(--ff-accent-soft) 70%, var(--ff-accent) 12%); border-color: var(--ff-accent); }
+.pop-gear:hover { transform: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .popup[data-phase='enter'], .popup[data-phase='enter'] .rise { animation: none !important; }
+}

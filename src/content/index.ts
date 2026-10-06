@@ -103,7 +103,7 @@ const overlay = new FillieOverlay({
   onSkip: (plan) => void skipQuestion(plan),
   onRegenerate: (plan) => void regenerate(plan),
   onFocusField: (fieldId) => void focusById(fieldId),
-  onOpenSettings: () => void chrome.runtime?.openOptionsPage?.(),
+  onOpenSettings: () => void sendMessage({ type: 'fillie:open-app', hash: '#/settings/ai' }).catch(() => undefined),
   onDismiss: () => {
     resolveResumePick(null);
     overlay.unmount();
@@ -284,6 +284,7 @@ async function run(): Promise<void> {
     state.plans = response.plans;
 
     overlay.setAiSource(describeServed(response.servedBy, response.switchedFrom));
+    overlay.setAiMissing(response.aiReady === false);
     state.aiCalls = response.aiCalls ?? 0;
     state.memoryHits = response.memoryHits ?? 0;
 

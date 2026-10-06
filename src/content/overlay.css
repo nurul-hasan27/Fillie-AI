@@ -1543,3 +1543,29 @@ textarea {
   color: var(--ff-accent);
   font-weight: 700;
 }
+
+/* Free-AI nudge */
+.ai-nudge {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--ff-accent-border);
+  border-radius: 12px;
+  background: var(--ff-accent-soft);
+}
+
+.ai-nudge-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--ff-accent);
+  font-size: 13px;
+}
+
+.ai-nudge p {
+  margin: 0;
+  color: var(--ff-text-secondary);
+  font-size: 12.5px;
+  line-height: 1.45;
+}

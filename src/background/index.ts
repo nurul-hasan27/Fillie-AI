@@ -236,6 +236,7 @@ async function handlePlan(payload: PlanRequest): Promise<PlanResponse> {
       switchedFrom: [...switchedFrom],
       profileCompleteness: profileCompletion(profile),
       aiEnabled: settings.enabled && settings.config.provider !== 'offline',
+      aiReady: isAiUsable(settings),
     };
   } catch (error) {
     return {
@@ -476,6 +477,20 @@ const applications = new ApplicationStore(storage, cloud);
 const backups = new BackupService(storage, cloud);
 
 const INSTALL_KEY = 'fillie:install-id';
+/** Bumped whenever something the popup displays may have changed (see the popup's cache). */
+const POPUP_DIRTY_KEY = 'fillie:popup-dirty';
+const POPUP_DIRTYING = new Set([
+  'fillie:apps-save',
+  'fillie:apps-delete',
+  'fillie:apps-track',
+  'fillie:save-settings',
+  'fillie:save-profile',
+  'fillie:sign-in',
+  'fillie:sign-in-oauth',
+  'fillie:sign-out',
+  'fillie:refresh-payment',
+  'fillie:restore-now',
+]);
 const BACKUP_AT_KEY = 'fillie:last-backup';
 
 async function deviceSignals(hashes: DeviceHashes): Promise<DeviceSignals> {
@@ -818,6 +833,12 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
       return handleShareOffers(message.value);
     case 'fillie:report-quality':
       return handleQuality(message.filled, message.edited, await deviceSignals(message.device));
+    case 'fillie:open-app': {
+      const api = (globalThis as { chrome?: typeof chrome }).chrome;
+      const hash = /^#\/[a-z0-9/_-]*$/i.test(message.hash) ? message.hash : '';
+      await api?.tabs?.create({ url: api.runtime.getURL(`pages/app.html${hash}`) });
+      return { ok: true };
+    }
     case 'fillie:open-account': {
       const api = (globalThis as { chrome?: typeof chrome }).chrome;
       await api?.tabs?.create({ url: api.runtime.getURL('pages/app.html#/account') });
@@ -872,7 +893,11 @@ if (runtime?.onMessage) {
   runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== 'string' || !message.type.startsWith('fillie:')) return false;
     dispatch(message as BackgroundMessage, _sender)
-      .then((result) => sendResponse(result))
+      .then(async (result) => {
+        // The popup shows cached numbers; anything that could change them marks the cache stale.
+        if (POPUP_DIRTYING.has(message.type)) await storage.put(POPUP_DIRTY_KEY, Date.now()).catch(() => undefined);
+        sendResponse(result);
+      })
       .catch((error: unknown) => {
         // Never leak a stack trace or an API key to the caller.
         const safe = error instanceof AIError ? error.message : 'Something went wrong inside Fillie.';
