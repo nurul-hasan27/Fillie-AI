@@ -68,7 +68,11 @@ function row(app: Application): TemplateResult {
     <article class="app-row" data-app-id="${escapeHtml(app.id)}" data-status="${app.status}">
       <div class="app-main">
         <h3>${escapeHtml(app.company)}</h3>
-        <p>${escapeHtml(app.role)}</p>
+        ${app.role
+          ? html`<p>${escapeHtml(app.role)}</p>`
+          : app.resumeName
+            ? html`<p class="app-resume" title="The role could not be read, so this shows the resume used"><em>(${escapeHtml(app.resumeName)})</em></p>`
+            : html`<p class="ff-meta">Role not found</p>`}
       </div>
       <div class="app-status">
         <button class="tag tag-${app.status}" type="button" data-action="edit-app" data-id="${escapeHtml(app.id)}" title="Change status">${STATUS_LABEL[app.status]}</button>
@@ -148,7 +152,7 @@ export function applicationEditor(app: Application, isNew: boolean): TemplateRes
           <div class="ff-field"><label class="ff-field-label" for="af-company">Company</label>
             <input class="ff-input" id="af-company" name="company" value="${escapeHtml(app.company)}" required /></div>
           <div class="ff-field"><label class="ff-field-label" for="af-role">Role</label>
-            <input class="ff-input" id="af-role" name="role" value="${escapeHtml(app.role)}" required /></div>
+            <input class="ff-input" id="af-role" name="role" value="${escapeHtml(app.role)}" placeholder="${escapeHtml(app.resumeName ? `(${app.resumeName})` : '')}" /></div>
         </div>
 
         <div class="ff-field">

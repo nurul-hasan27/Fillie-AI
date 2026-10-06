@@ -109,6 +109,9 @@ export interface AccountStatus {
   /** Applications saved on this device, waiting to upload. */
   pendingApplications: number;
   priceLabel: string;
+  razorpayLabel: string;
+  /** Whether the user lets their offers be used, anonymously, as success stories. */
+  shareOffers: boolean;
   lastBackupAt?: number;
 }
 
@@ -169,7 +172,10 @@ export type BackgroundMessage =
   | { type: 'fillie:sign-in'; mode: 'signin' | 'signup'; email: string; password: string }
   | { type: 'fillie:sign-in-oauth'; provider: OAuthProvider }
   | { type: 'fillie:sign-out' }
-  | { type: 'fillie:checkout' }
+  | { type: 'fillie:checkout'; provider: 'stripe' | 'razorpay' }
+  | { type: 'fillie:feedback'; rating: number | null; kind: 'review' | 'bug' | 'idea'; message: string }
+  | { type: 'fillie:set-share-offers'; value: boolean }
+  | { type: 'fillie:report-quality'; filled: number; edited: number; device: DeviceHashes }
   | { type: 'fillie:open-account' }
   | { type: 'fillie:refresh-payment'; device: DeviceHashes }
   | { type: 'fillie:backup-now' }
@@ -177,7 +183,7 @@ export type BackgroundMessage =
   | { type: 'fillie:apps-list'; query: ApplicationsRequest }
   | { type: 'fillie:apps-save'; app: Application }
   | { type: 'fillie:apps-delete'; id: string }
-  | { type: 'fillie:apps-track'; context: ApplicationContext }
+  | { type: 'fillie:apps-track'; context: ApplicationContext; resumeId?: string }
   | { type: 'fillie:get-memory' }
   | { type: 'fillie:save-memory'; memory: LearnedAnswer[] }
   | { type: 'fillie:report-session'; url: string; stats: SessionStats; aiCalls?: number }

@@ -25,6 +25,7 @@ interface Row {
   rating_source: 'ai' | 'user' | null;
   url: string;
   host: string;
+  resume_name: string;
   updated_at: number;
 }
 
@@ -43,14 +44,16 @@ export interface ApplicationPage {
 }
 
 /** Same company + role is one application, however many times the form is opened. */
-export function applicationKey(company: string, role: string): string {
-  return `${normalizeText(company).toLowerCase()}|${normalizeText(role).toLowerCase()}`;
+export function applicationKey(company: string, role: string, resumeName = ''): string {
+  // With no role to tell postings apart, the resume used stands in for it.
+  const what = normalizeText(role) || (resumeName ? `(${normalizeText(resumeName)})` : '');
+  return `${normalizeText(company).toLowerCase()}|${what.toLowerCase()}`;
 }
 
 export function newApplication(input: Partial<Application> & { company: string; role: string }): Application {
   const now = Date.now();
   return {
-    id: input.id ?? `app-${stableHash(applicationKey(input.company, input.role) + now).toString(36)}-${now.toString(36)}`,
+    id: input.id ?? `app-${stableHash(applicationKey(input.company, input.role, input.resumeName) + now).toString(36)}-${now.toString(36)}`,
     company: input.company.trim().slice(0, 120),
     role: input.role.trim().slice(0, 160),
     status: input.status ?? 'applied',
@@ -62,6 +65,7 @@ export function newApplication(input: Partial<Application> & { company: string; 
     ratingSource: input.rating ? (input.ratingSource ?? 'user') : null,
     url: input.url ?? '',
     host: input.host ?? '',
+    resumeName: (input.resumeName ?? '').trim().slice(0, 80),
     updatedAt: now,
   };
 }
@@ -99,6 +103,7 @@ const toRow = (app: Application, userId: string): Row & { user_id: string } => (
   rating_source: app.ratingSource,
   url: app.url,
   host: app.host,
+  resume_name: app.resumeName,
   updated_at: app.updatedAt,
 });
 
@@ -115,6 +120,7 @@ const fromRow = (row: Row): Application => ({
   ratingSource: row.rating_source,
   url: row.url ?? '',
   host: row.host ?? '',
+  resumeName: row.resume_name ?? '',
   updatedAt: Number(row.updated_at),
 });
 
@@ -147,7 +153,7 @@ export class ApplicationStore {
     /** Only called for a new application (it may be slow, e.g. an AI call). */
     enrich?: () => Promise<Partial<Application>>,
   ): Promise<{ app: Application; created: boolean }> {
-    const key = applicationKey(draft.company, draft.role);
+    const key = applicationKey(draft.company, draft.role, draft.resumeName);
     const existing = await this.findByKey(key);
     if (existing) return { app: existing, created: false };
     const app = newApplication({ ...draft, ...(enrich ? await enrich() : {}) });
@@ -156,14 +162,18 @@ export class ApplicationStore {
   }
 
   private async findByKey(key: string): Promise<Application | undefined> {
-    const local = (await this.readLocal()).find((row) => applicationKey(row.company, row.role) === key);
+    const local = (await this.readLocal()).find((row) => applicationKey(row.company, row.role, row.resumeName) === key);
     if (local) return local;
     const session = await this.client.getSession();
     if (!session) return undefined;
     try {
-      const [company, role] = key.split('|');
+      const [company, what] = key.split('|');
+      const byResume = what.startsWith('(') && what.endsWith(')');
+      const second = byResume
+        ? `role=eq.&resume_name=ilike.${encodeURIComponent(escapeLike(what.slice(1, -1)))}`
+        : `role=ilike.${encodeURIComponent(escapeLike(what))}`;
       const rows = await this.client.json<Row[]>(
-        `/rest/v1/applications?select=*&company=ilike.${encodeURIComponent(escapeLike(company))}&role=ilike.${encodeURIComponent(escapeLike(role))}&limit=1`,
+        `/rest/v1/applications?select=*&company=ilike.${encodeURIComponent(escapeLike(company))}&${second}&limit=1`,
       );
       return rows[0] ? fromRow(rows[0]) : undefined;
     } catch {

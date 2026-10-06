@@ -42,3 +42,18 @@ describe('Stripe webhook signature', () => {
     expect(await verifyStripeSignature(payload, sign(1_699_990_000), secret, { now })).toBe(false);
   });
 });
+
+describe('Razorpay webhook signature', () => {
+  const secret = 'rzp_whsec';
+  const payload = '{"event":"payment_link.paid"}';
+  const sign = (body = payload, key = secret) => createHmac('sha256', key).update(body).digest('hex');
+
+  it('accepts the right signature and rejects anything else', async () => {
+    const { verifyRazorpaySignature } = await import('../../supabase/functions/_shared/razorpay-signature');
+    expect(await verifyRazorpaySignature(payload, sign(), secret)).toBe(true);
+    expect(await verifyRazorpaySignature(payload, sign(payload, 'other'), secret)).toBe(false);
+    expect(await verifyRazorpaySignature('{"event":"x"}', sign(), secret)).toBe(false);
+    expect(await verifyRazorpaySignature(payload, null, secret)).toBe(false);
+    expect(await verifyRazorpaySignature(payload, sign(), '')).toBe(false);
+  });
+});

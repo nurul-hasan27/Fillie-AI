@@ -1,6 +1,7 @@
-// Starts a Stripe Checkout for the $5 one-time payment.
+// Starts a checkout for the one-time payment, with Stripe (card, $5) or Razorpay (UPI/cards/netbanking, INR).
 // Deploy with: supabase functions deploy create-checkout
-// Secrets: STRIPE_SECRET_KEY, SUCCESS_URL, CANCEL_URL
+// Secrets: SUCCESS_URL, CANCEL_URL, STRIPE_SECRET_KEY,
+//          RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_AMOUNT_MINOR (paise, e.g. 42000), RAZORPAY_CURRENCY (default INR)
 import { corsHeaders, reply } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
@@ -14,6 +15,12 @@ Deno.serve(async (req) => {
   if (!userResponse.ok) return reply({ error: 'Sign in first.' }, 401);
   const user = (await userResponse.json()) as { id: string; email?: string };
 
+  const body = (await req.json().catch(() => ({}))) as { provider?: string };
+  if (body.provider === 'razorpay') return razorpay(user);
+  return stripe(user);
+});
+
+async function stripe(user: { id: string; email?: string }): Promise<Response> {
   const form = new URLSearchParams({
     mode: 'payment',
     'line_items[0][quantity]': '1',
@@ -34,4 +41,29 @@ Deno.serve(async (req) => {
   const session = await stripe.json();
   if (!stripe.ok || !session.url) return reply({ error: 'Could not start checkout.' }, 502);
   return reply({ url: session.url });
-});
+}
+
+async function razorpay(user: { id: string; email?: string }): Promise<Response> {
+  const keyId = Deno.env.get('RAZORPAY_KEY_ID');
+  const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
+  if (!keyId || !keySecret) return reply({ error: 'Razorpay is not set up.' }, 501);
+
+  const response = await fetch('https://api.razorpay.com/v1/payment_links', {
+    method: 'POST',
+    headers: { Authorization: `Basic ${btoa(`${keyId}:${keySecret}`)}`, 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      amount: Number(Deno.env.get('RAZORPAY_AMOUNT_MINOR') ?? '42000'),
+      currency: Deno.env.get('RAZORPAY_CURRENCY') ?? 'INR',
+      description: 'Fillie: lifetime access',
+      reference_id: `${user.id.slice(0, 8)}-${Date.now()}`,
+      customer: user.email ? { email: user.email } : undefined,
+      notify: { email: false, sms: false },
+      notes: { user_id: user.id },
+      callback_url: Deno.env.get('SUCCESS_URL')!,
+      callback_method: 'get',
+    }),
+  });
+  const link = await response.json();
+  if (!response.ok || !link.short_url) return reply({ error: 'Could not start checkout.' }, 502);
+  return reply({ url: link.short_url });
+}

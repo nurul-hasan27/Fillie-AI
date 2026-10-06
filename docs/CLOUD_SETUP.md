@@ -1,21 +1,22 @@
 # Cloud setup (all free tiers)
 
-Fillie's accounts, application database, backup, free-trial counter and one-time payment run on **Supabase** (free plan) and **Stripe** (no monthly fee, a small fee per payment). No other server is needed.
+Fillie's accounts, application database, backup, free-trial counter, payments and admin dashboard run on **Supabase** (free plan), with **Stripe** (cards, $5) and **Razorpay** (UPI, cards, netbanking, INR) for the one-time payment. Neither charges a monthly fee, only a small fee per payment. No other server is needed.
 
 | Piece | Where it lives |
 | --- | --- |
 | Sign-in (email, Google, GitHub, Apple) | Supabase Auth |
 | Applications, backups, licences | Supabase Postgres, protected by row-level security |
 | Free-trial counter (3 per week, per device) | Supabase Edge Function `trial` |
-| $5 payment | Stripe Checkout via Edge Functions `create-checkout` and `stripe-webhook` |
+| One-time payment | `create-checkout` starts Stripe or Razorpay checkout; `stripe-webhook` / `razorpay-webhook` unlock the user and record the payment |
+| Admin dashboard | SQL functions in `0002_*.sql`, readable only by your verified Google account (see the website repo's `/admin`) |
 
 ## 1. Supabase project
 
 1. Create a project at supabase.com (free plan).
-2. **SQL editor**: paste and run `supabase/migrations/0001_init.sql`.
+2. **SQL editor**: run `supabase/migrations/0001_init.sql`, then `supabase/migrations/0002_payments_feedback_admin.sql`.
 3. **Authentication → Providers**: enable Email, Google, GitHub and (optionally) Apple.
    - Google/GitHub: create an OAuth app in each console and paste the client id and secret.
-   - **Apple needs a paid Apple Developer account ($99/year).** Skip it if you want zero cost; the sign-in button then reports an error, so remove it from `src/pages/views/account.ts`.
+   - Apple: needs your Apple Developer account (Services ID, key and team ID, entered in Supabase's Apple provider form).
 4. **Authentication → URL configuration → Redirect URLs**: add `https://<EXTENSION_ID>.chromiumapp.org/`. Your extension ID is shown on `chrome://extensions` (it is fixed once the extension is published; for local testing, use the ID of your unpacked copy).
 5. Copy the **Project URL** and **anon public key** into `src/core/cloud/config.ts`. The anon key is public by design; never put the `service_role` key in the extension.
 
@@ -28,10 +29,12 @@ supabase login
 supabase link --project-ref <your-project-ref>
 supabase secrets set TRIAL_SALT=$(openssl rand -hex 16)
 supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_WEBHOOK_SECRET=whsec_...
+supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=42000
 supabase secrets set SUCCESS_URL=https://your-site.com/thanks CANCEL_URL=https://your-site.com
 supabase functions deploy trial
 supabase functions deploy create-checkout
 supabase functions deploy stripe-webhook --no-verify-jwt
+supabase functions deploy razorpay-webhook --no-verify-jwt
 ```
 
 ## 3. Stripe
@@ -39,6 +42,13 @@ supabase functions deploy stripe-webhook --no-verify-jwt
 1. Create a Stripe account (no monthly fee).
 2. **Developers → Webhooks → Add endpoint**: `https://<project-ref>.supabase.co/functions/v1/stripe-webhook`, event `checkout.session.completed`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
 3. Test with Stripe's test keys and card `4242 4242 4242 4242` first, then switch to live keys.
+
+## 3b. Razorpay
+
+1. Create a Razorpay account and finish KYC (needed for live payments).
+2. **Settings → API Keys**: generate a key; put the id and secret in the secrets above.
+3. **Settings → Webhooks → Add**: URL `https://<project-ref>.supabase.co/functions/v1/razorpay-webhook`, a secret you choose (= `RAZORPAY_WEBHOOK_SECRET`), event **payment_link.paid**.
+4. Make `RAZORPAY_AMOUNT_MINOR` (paise) match `razorpayLabel` in `src/core/cloud/config.ts` (42000 paise = ₹420).
 
 ## 4. Keep the free database awake
 
