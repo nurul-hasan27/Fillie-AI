@@ -290,3 +290,24 @@ describe('paying and getting unlocked straight away', () => {
     expect(await access.begin(device, 'https://a.com/2')).toMatchObject({ allowed: true, plan: 'paid' });
   });
 });
+
+describe('a stalled connection never freezes Fillie', () => {
+  const neverAnswers = ((_url: string, init?: RequestInit) =>
+    new Promise<Response>((_resolve, reject) => init?.signal?.addEventListener('abort', () => reject(new DOMException('aborted', 'AbortError'))))) as unknown as FetchFn;
+
+  it('gives up on a cloud call after the deadline', async () => {
+    const storage = new Storage();
+    await signedIn(storage);
+    const client = new CloudClient(storage, { config, fetchImpl: neverAnswers, timeoutMs: 30 });
+    await expect(client.json('/rest/v1/applications')).rejects.toThrow(/too long/);
+  });
+
+  it('still lets the user fill (local free count) when the trial server never answers', async () => {
+    const storage = new Storage();
+    const client = new CloudClient(storage, { config, fetchImpl: neverAnswers, timeoutMs: 30 });
+    const access = new AccessService(storage, client, { config });
+    const results = [];
+    for (let i = 0; i < 4; i += 1) results.push((await access.begin(device, `https://a.com/${i}`)).allowed);
+    expect(results).toEqual([true, true, true, false]);
+  });
+});

@@ -1071,6 +1071,7 @@ app.addEventListener('click', async (event) => {
     case 'delete-app': {
       const id = target.getAttribute('data-id') ?? '';
       if (!confirm('Delete this application?')) return;
+      dbMutations += 1;
       await sendMessage({ type: 'fillie:apps-delete', id });
       state.db.rows = state.db.rows.filter((row) => row.id !== id);
       render();
@@ -1083,6 +1084,7 @@ app.addEventListener('click', async (event) => {
       if (!row) return;
       // Tapping the current rating clears it; the user always has the last word.
       const rating = row.rating === value ? null : value;
+      dbMutations += 1;
       const saved = await sendMessage<Application>({
         type: 'fillie:apps-save',
         app: { ...row, rating, ratingSource: rating ? 'user' : null },
@@ -1743,6 +1745,8 @@ function summariseSuggestion(section: string, value: unknown): string {
 let dbObserver: IntersectionObserver | null = null;
 let dbSearchTimer: ReturnType<typeof setTimeout> | null = null;
 let dbRequest = 0;
+/** Bumped whenever the user changes a row, so a slower, older list can never overwrite that change. */
+let dbMutations = 0;
 
 /** Loads one page (100 rows) of applications; `reset` starts again from the top. */
 async function loadApps(reset: boolean): Promise<void> {
@@ -1751,27 +1755,34 @@ async function loadApps(reset: boolean): Promise<void> {
   db.loading = true;
   db.error = undefined;
   const ticket = (dbRequest += 1);
+  const mutationsAtStart = dbMutations;
   if (reset) {
     db.rows = [];
     db.loaded = false;
   }
-  render();
+  // Never redraw under an open Add/Edit dialog: it would wipe what is being typed.
+  if (!state.editingApp) render();
   try {
     const page = await sendMessage<ApplicationPage>({
       type: 'fillie:apps-list',
       query: { offset: reset ? 0 : db.rows.length, search: db.search, status: db.status },
     });
     if (ticket !== dbRequest) return; // a newer search superseded this one
+    if (mutationsAtStart !== dbMutations) {
+      // The user saved, rated or deleted something while this was loading; this list is out of date.
+      db.loading = false;
+      return void loadApps(reset);
+    }
     db.rows = reset ? page.rows : [...db.rows, ...page.rows];
     db.hasMore = page.hasMore;
     db.localOnly = page.localOnly;
   } catch (error) {
     db.error = error instanceof Error ? error.message : 'Please try again.';
   } finally {
-    if (ticket === dbRequest) {
+    if (ticket === dbRequest && db.loading) {
       db.loading = false;
       db.loaded = true;
-      render();
+      if (!state.editingApp) render();
     }
   }
 }
@@ -1794,7 +1805,8 @@ async function loadAccount(): Promise<void> {
   } catch {
     state.account.message = { tone: 'danger', text: 'Could not load your account.' };
   }
-  render();
+  // Not while a dialog is open: a redraw would wipe what is being typed in it.
+  if (!state.editingApp) render();
 }
 
 function applyRouteData(): void {
@@ -1852,6 +1864,7 @@ app.addEventListener('submit', async (event) => {
     event.preventDefault();
     const app = readEditor(form, state.editingApp.app);
     if (!app.company || (!app.role && !app.resumeName)) return;
+    dbMutations += 1;
     const saved = await sendMessage<Application>({ type: 'fillie:apps-save', app });
     const rows = state.db.rows.filter((row) => row.id !== saved.id);
     state.db.rows = [saved, ...rows].sort((a, b) => b.appliedAt.localeCompare(a.appliedAt));
