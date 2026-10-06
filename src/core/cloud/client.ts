@@ -34,7 +34,7 @@ interface AuthResponse {
 export class CloudClient {
   constructor(
     private readonly storage: Pick<Storage, 'read' | 'put' | 'drop'>,
-    private readonly options: { config?: typeof CLOUD; fetchImpl?: FetchFn; now?: () => number } = {},
+    private readonly options: { config?: typeof CLOUD; fetchImpl?: FetchFn; now?: () => number; timeoutMs?: number } = {},
   ) {}
 
   private get config() {
@@ -45,6 +45,26 @@ export class CloudClient {
   }
   private get fetchFn(): FetchFn {
     return this.options.fetchImpl ?? ((input, init) => fetch(input, init));
+  }
+
+  /**
+   * Every cloud call has a deadline. Without one, a stalled connection would leave
+   * Fillie waiting on "scanning" forever; with one, callers fall back to what is on
+   * this device (the local free-fill counter, the cached licence, the local queue).
+   */
+  private async timed(input: string, init: RequestInit = {}, timeoutMs?: number): Promise<Response> {
+    const controller = new AbortController();
+    // A call may ask for a shorter deadline than the client's own, never a longer one.
+    const limit = Math.min(timeoutMs ?? Infinity, this.options.timeoutMs ?? 8000);
+    const timer = setTimeout(() => controller.abort(), limit);
+    try {
+      return await this.fetchFn(input, { ...init, signal: controller.signal });
+    } catch (error) {
+      if (controller.signal.aborted) throw new CloudError('The server took too long to answer.', 0);
+      throw error;
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
   /* -------------------------------- session -------------------------------- */
@@ -87,7 +107,7 @@ export class CloudClient {
   /* --------------------------------- auth ---------------------------------- */
 
   private async auth(path: string, body: unknown): Promise<AuthResponse> {
-    const response = await this.fetchFn(`${this.config.supabaseUrl}/auth/v1${path}`, {
+    const response = await this.timed(`${this.config.supabaseUrl}/auth/v1${path}`, {
       method: 'POST',
       headers: { apikey: this.config.anonKey, 'Content-Type': 'application/json' },
       body: JSON.stringify(body),
@@ -123,7 +143,7 @@ export class CloudClient {
     const refreshToken = fragment.get('refresh_token');
     if (!accessToken || !refreshToken) throw new CloudError('Sign-in was cancelled.');
 
-    const response = await this.fetchFn(`${this.config.supabaseUrl}/auth/v1/user`, {
+    const response = await this.timed(`${this.config.supabaseUrl}/auth/v1/user`, {
       headers: { apikey: this.config.anonKey, Authorization: `Bearer ${accessToken}` },
     });
     if (!response.ok) throw new CloudError('Could not confirm the sign-in.', response.status);
@@ -139,7 +159,7 @@ export class CloudClient {
     await this.storage.drop(SESSION_KEY);
     if (!session) return;
     // Best effort: the local session is already gone.
-    await this.fetchFn(`${this.config.supabaseUrl}/auth/v1/logout`, {
+    await this.timed(`${this.config.supabaseUrl}/auth/v1/logout`, {
       method: 'POST',
       headers: { apikey: this.config.anonKey, Authorization: `Bearer ${session.accessToken}` },
     }).catch(() => undefined);
@@ -148,17 +168,17 @@ export class CloudClient {
   /* ---------------------------- authenticated calls ---------------------------- */
 
   /** Calls PostgREST (`/rest/v1/...`) or an Edge Function (`/functions/v1/...`). */
-  async request(path: string, init: RequestInit = {}, options: { anonymous?: boolean } = {}): Promise<Response> {
+  async request(path: string, init: RequestInit = {}, options: { anonymous?: boolean; timeoutMs?: number } = {}): Promise<Response> {
     const session = options.anonymous ? null : await this.getSession();
     if (!options.anonymous && !session) throw new CloudError('You are not signed in.', 401);
     const headers = new Headers(init.headers);
     headers.set('apikey', this.config.anonKey);
     headers.set('Authorization', `Bearer ${session?.accessToken ?? this.config.anonKey}`);
     if (init.body && !headers.has('Content-Type')) headers.set('Content-Type', 'application/json');
-    return this.fetchFn(`${this.config.supabaseUrl}${path}`, { ...init, headers });
+    return this.timed(`${this.config.supabaseUrl}${path}`, { ...init, headers }, options.timeoutMs);
   }
 
-  async json<T>(path: string, init: RequestInit = {}, options: { anonymous?: boolean } = {}): Promise<T> {
+  async json<T>(path: string, init: RequestInit = {}, options: { anonymous?: boolean; timeoutMs?: number } = {}): Promise<T> {
     const response = await this.request(path, init, options);
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as { message?: string; error?: string };

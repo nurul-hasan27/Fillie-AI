@@ -21,6 +21,7 @@ import { BackupService } from '../core/cloud/backup';
 import { CLOUD, isCloudConfigured } from '../core/cloud/config';
 import type { DeviceSignals, OAuthProvider } from '../core/cloud/types';
 import { suggestIntel } from '../core/engine/intel';
+import { createAuthWindow, type WindowsApi } from './popup-window';
 import { createProvider } from '../core/ai/factory';
 import { buildProviderChain, FailoverProvider } from '../core/ai/chain';
 import { getPreset } from '../core/ai/presets';
@@ -499,7 +500,11 @@ async function handleAccountStatus(device: DeviceHashes): Promise<AccountStatus>
 }
 
 function authError(error: unknown): { ok: false; error: string } {
-  return { ok: false, error: error instanceof CloudError ? error.message : 'Something went wrong. Please try again.' };
+  if (error instanceof CloudError) return { ok: false, error: error.message };
+  // Not one of ours (a browser or network error). Say what it was, so it can be fixed, and keep a stack in the worker console.
+  console.error('Fillie sign-in failed', error);
+  const detail = error instanceof Error ? error.message : String(error);
+  return { ok: false, error: `Something went wrong: ${detail.slice(0, 200)}` };
 }
 
 async function afterSignIn(): Promise<void> {
@@ -527,7 +532,6 @@ async function handleSignIn(message: Extract<BackgroundMessage, { type: 'fillie:
 
 /* ---- Sign-in popup ---------------------------------------------------- */
 
-const AUTH_WINDOW = { width: 480, height: 720 };
 const AUTH_TIMEOUT_MS = 5 * 60 * 1000;
 
 interface PendingAuth {
@@ -548,12 +552,7 @@ async function openAuthPopup(url: string): Promise<string> {
   if (!api?.windows) throw new CloudError('Sign-in is not available here.');
   pendingAuth?.reject(new CloudError('Sign-in was cancelled.'));
 
-  const parent = await api.windows.getLastFocused().catch(() => undefined);
-  const left = Math.max(0, Math.round((parent?.left ?? 0) + ((parent?.width ?? 1200) - AUTH_WINDOW.width) / 2));
-  const top = Math.max(0, Math.round((parent?.top ?? 0) + ((parent?.height ?? 800) - AUTH_WINDOW.height) / 2));
-  const created = await api.windows.create({ url, type: 'popup', focused: true, left, top, ...AUTH_WINDOW });
-  if (created?.id === undefined) throw new CloudError('Could not open the sign-in window.');
-  const windowId = created.id;
+  const windowId = await createAuthWindow(api.windows as unknown as WindowsApi, url);
 
   return new Promise<string>((resolve, reject) => {
     const finish = () => {
