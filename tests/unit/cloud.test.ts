@@ -8,7 +8,7 @@ import { weekStart } from '../../src/core/cloud/week';
 import { extractNotes, parseIntel, suggestIntel } from '../../src/core/engine/intel';
 import type { CloudSession, DeviceSignals } from '../../src/core/cloud/types';
 
-const config = { supabaseUrl: 'https://p.supabase.co', anonKey: 'anon', freeFillsPerWeek: 3, priceLabel: '$5', pageSize: 100 };
+const config = { supabaseUrl: 'https://p.supabase.co', anonKey: 'anon', freeFillsPerWeek: 3, priceLabel: '$5', razorpayLabel: '₹420', pageSize: 100 };
 const device: DeviceSignals = { install: 'i1', hw: 'h1', br: 'b1' };
 const json = (data: unknown, status = 200) => new Response(JSON.stringify(data), { status });
 

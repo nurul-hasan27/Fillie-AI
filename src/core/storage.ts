@@ -173,11 +173,34 @@ export class Storage {
     return next;
   }
 
+  /**
+   * Everything the user can pick as "the resume for this application": the
+   * named resumes plus any uploaded document filed as a resume that has
+   * readable text. Documents are offered under the id `doc:<id>`.
+   */
+  async getResumeChoices(): Promise<ResumesState> {
+    const state = await this.getResumes();
+    const documents = (await this.getProfile()).documents ?? [];
+    const fromDocuments = documents
+      .filter((doc) => doc.category === 'resume' && doc.textContent?.trim())
+      .map((doc) => ({ id: `doc:${doc.id}`, name: (doc.name || doc.fileName).slice(0, 40), text: doc.textContent as string, updatedAt: doc.updatedAt }));
+    const defaultDoc = documents.find((doc) => doc.isDefault && doc.category === 'resume' && doc.textContent?.trim());
+    const defaultId = state.defaultId || (defaultDoc ? `doc:${defaultDoc.id}` : fromDocuments[0]?.id ?? '');
+    return { resumes: [...state.resumes, ...fromDocuments], defaultId };
+  }
+
   /** Text of the resume with this id; '' for 'none', the default when omitted. */
   async getResumeText(id?: string): Promise<string> {
     if (id === 'none') return '';
-    const { resumes, defaultId } = await this.getResumes();
+    const { resumes, defaultId } = await this.getResumeChoices();
     return (resumes.find((r) => r.id === (id || defaultId)) ?? resumes.find((r) => r.id === defaultId))?.text ?? '';
+  }
+
+  /** The display name of a resume choice ('' for none / unknown). */
+  async getResumeName(id?: string): Promise<string> {
+    if (id === 'none') return '';
+    const { resumes, defaultId } = await this.getResumeChoices();
+    return (resumes.find((r) => r.id === (id || defaultId)) ?? resumes.find((r) => r.id === defaultId))?.name ?? '';
   }
 
   async getSettings(): Promise<AISettings> {

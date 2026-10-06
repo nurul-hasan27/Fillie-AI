@@ -105,7 +105,7 @@ const state: AppState = {
   resumes: { resumes: [], defaultId: '' },
   activeResumeId: '',
   db: { rows: [], hasMore: false, loading: false, loaded: false, localOnly: false, signedIn: false, search: '', status: 'all' },
-  account: { status: null, mode: 'signin', busy: '' },
+  account: { status: null, mode: 'signin', busy: '', feedbackRating: 0 },
   memoryQuery: '',
   theme: (localStorage.getItem('fillie:theme') as AppState['theme']) ?? 'system',
   importWarnings: [],
@@ -1091,6 +1091,30 @@ app.addEventListener('click', async (event) => {
       render();
       return;
     }
+    case 'toggle-share-offers': {
+      const value = (target as HTMLInputElement).checked;
+      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:set-share-offers', value });
+      if (!result.ok) toast(result.error ?? 'Could not save.', 'danger');
+      await loadAccount();
+      return;
+    }
+    case 'feedback-star': {
+      state.account.feedbackRating = Number(target.getAttribute('data-value'));
+      render();
+      app.querySelector<HTMLTextAreaElement>('#fb-message')?.focus();
+      return;
+    }
+    case 'send-feedback': {
+      const message = app.querySelector<HTMLTextAreaElement>('#fb-message')?.value ?? '';
+      const kind = (app.querySelector<HTMLSelectElement>('#fb-kind')?.value as 'review' | 'bug' | 'idea') ?? 'review';
+      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:feedback', rating: state.account.feedbackRating || null, kind, message });
+      if (result.ok) {
+        state.account.feedbackRating = 0;
+        toast('Thank you for the feedback!');
+        render();
+      } else toast(result.error ?? 'Could not send.', 'danger');
+      return;
+    }
     case 'filter-status':
       state.db.status = (target.getAttribute('data-status') as ApplicationStatus | 'all') ?? 'all';
       void loadApps(true);
@@ -1112,7 +1136,8 @@ app.addEventListener('click', async (event) => {
       await loadAccount();
       return;
     case 'checkout': {
-      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:checkout' });
+      const provider = (target.getAttribute('data-provider') as 'stripe' | 'razorpay') ?? 'stripe';
+      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:checkout', provider });
       if (!result.ok) toast(result.error ?? 'Could not start checkout.', 'danger');
       return;
     }
@@ -1826,7 +1851,7 @@ app.addEventListener('submit', async (event) => {
   if (form.id === 'app-form' && state.editingApp) {
     event.preventDefault();
     const app = readEditor(form, state.editingApp.app);
-    if (!app.company || !app.role) return;
+    if (!app.company || (!app.role && !app.resumeName)) return;
     const saved = await sendMessage<Application>({ type: 'fillie:apps-save', app });
     const rows = state.db.rows.filter((row) => row.id !== saved.id);
     state.db.rows = [saved, ...rows].sort((a, b) => b.appliedAt.localeCompare(a.appliedAt));
