@@ -26,9 +26,9 @@ Deno.serve(async (req) => {
     const payment = event.payload?.payment?.entity;
     const userId = link?.notes?.user_id;
     if (link?.status === 'paid' && payment && userId) {
-      const ok = await recordPayment(admin, { userId, provider: 'razorpay', ref: payment.id, amountMinor: payment.amount, currency: payment.currency });
+      const result = await recordPayment(admin, { userId, provider: 'razorpay', ref: payment.id, amountMinor: payment.amount, currency: payment.currency });
       // 500 makes Razorpay retry rather than drop a paid user.
-      if (!ok) return new Response('could not record payment', { status: 500 });
+      if (!result.ok) return new Response('could not record payment', { status: 500 });
     }
   }
   return new Response('ok');
