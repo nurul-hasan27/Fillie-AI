@@ -32,11 +32,12 @@ function planCard(status: AccountStatus): TemplateResult {
     <div class="hero-card" data-tone="marigold">
       <div class="hero-copy">
         <h2>${left > 0 ? `${left} free ${left === 1 ? 'filling' : 'fillings'} left this week` : 'Free fillings used up'}</h2>
-        <p>Every week you get ${access.limit} free form fillings. Unlock Fillie once for ${escapeHtml(priceLabel)} and fill as many as you like.</p>
+        <p>Every week you get ${access.limit} free form fillings. Unlock Fillie once for ${escapeHtml(status.priceInrLabel)} (UPI, netbanking, cards) or ${escapeHtml(priceLabel)} (international card) and fill as many as you like.</p>
         <div class="dots" aria-hidden="true">${dots}</div>
         <div class="row-wrap" style="margin-top:14px">
           ${access.signedIn
-            ? html`<button class="ff-btn ff-btn-primary ff-btn-lg" type="button" data-action="checkout" ${status.cloudConfigured ? '' : 'disabled'}>Unlock for ${escapeHtml(priceLabel.replace(' one-time', ''))}</button>
+            ? html`<button class="ff-btn ff-btn-primary ff-btn-lg" type="button" data-action="checkout" data-currency="INR" ${status.cloudConfigured ? '' : 'disabled'}>Pay ${escapeHtml(status.priceInrLabel)} · UPI, netbanking, cards</button>
+                   <button class="ff-btn ff-btn-secondary ff-btn-lg" type="button" data-action="checkout" data-currency="USD" ${status.cloudConfigured ? '' : 'disabled'}>Pay ${escapeHtml(priceLabel.replace(' one-time', ''))} · international card</button>
                    <button class="ff-btn ff-btn-ghost" type="button" data-action="refresh-payment">I have paid</button>`
             : html`<span class="hero-pill">Sign in below to unlock</span>`}
         </div>

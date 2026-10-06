@@ -1138,7 +1138,8 @@ app.addEventListener('click', async (event) => {
       await loadAccount();
       return;
     case 'checkout': {
-      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:checkout' });
+      const currency = target.getAttribute('data-currency') === 'INR' ? 'INR' : 'USD';
+      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:checkout', currency });
       if (!result.ok) toast(result.error ?? 'Could not start checkout.', 'danger');
       return;
     }

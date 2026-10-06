@@ -1,8 +1,9 @@
-// Starts the one-time $5 checkout with Razorpay (a payment link).
+// Starts the one-time checkout with Razorpay (a payment link): ₹ for UPI/netbanking/wallets/cards, or $ for international cards.
 // Deploy with: supabase functions deploy create-checkout
 // Secrets: SUCCESS_URL, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET,
-//          RAZORPAY_AMOUNT_MINOR (cents, default 500 = $5), RAZORPAY_CURRENCY (default USD)
+//          RAZORPAY_AMOUNT_MINOR (USD cents, default 500 = $5), RAZORPAY_INR_AMOUNT_MINOR (paise, default 44900 = ₹449)
 import { corsHeaders, reply } from '../_shared/cors.ts';
+import { pickPrice, type Price } from '../_shared/pricing.ts';
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -15,10 +16,11 @@ Deno.serve(async (req) => {
   if (!userResponse.ok) return reply({ error: 'Sign in first.' }, 401);
   const user = (await userResponse.json()) as { id: string; email?: string };
 
-  return razorpay(user);
+  const body = (await req.json().catch(() => ({}))) as { currency?: string };
+  return razorpay(user, pickPrice(body.currency, (name) => Deno.env.get(name)));
 });
 
-async function razorpay(user: { id: string; email?: string }): Promise<Response> {
+async function razorpay(user: { id: string; email?: string }, price: Price): Promise<Response> {
   const keyId = Deno.env.get('RAZORPAY_KEY_ID');
   const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
   if (!keyId || !keySecret) {
@@ -30,8 +32,8 @@ async function razorpay(user: { id: string; email?: string }): Promise<Response>
     method: 'POST',
     headers: { Authorization: `Basic ${btoa(`${keyId}:${keySecret}`)}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      amount: Number(Deno.env.get('RAZORPAY_AMOUNT_MINOR') ?? '500'),
-      currency: Deno.env.get('RAZORPAY_CURRENCY') ?? 'USD',
+      amount: price.amountMinor,
+      currency: price.currency,
       description: 'Fillie: lifetime access',
       reference_id: `${user.id.slice(0, 8)}-${Date.now()}`,
       customer: user.email ? { email: user.email } : undefined,

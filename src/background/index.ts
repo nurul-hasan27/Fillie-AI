@@ -493,6 +493,7 @@ async function handleAccountStatus(device: DeviceHashes): Promise<AccountStatus>
     access: await access.status(await deviceSignals(device)),
     pendingApplications: await applications.pendingCount(),
     priceLabel: CLOUD.priceLabel,
+    priceInrLabel: CLOUD.priceInrLabel,
     shareOffers: await readShareOffers(),
     lastBackupAt: await storage.read<number>(BACKUP_AT_KEY),
   };
@@ -611,9 +612,9 @@ async function handleOAuth(provider: OAuthProvider) {
   }
 }
 
-async function handleCheckout() {
+async function handleCheckout(currency: 'INR' | 'USD') {
   try {
-    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: '{}' });
+    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: JSON.stringify({ currency }) });
     await (globalThis as { chrome?: typeof chrome }).chrome?.tabs?.create({ url });
     return { ok: true, url };
   } catch (error) {
@@ -800,7 +801,7 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
       await cloud.signOut();
       return { ok: true };
     case 'fillie:checkout':
-      return handleCheckout();
+      return handleCheckout(message.currency);
     case 'fillie:feedback':
       return handleFeedback(message);
     case 'fillie:set-share-offers':

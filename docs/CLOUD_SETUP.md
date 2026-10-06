@@ -28,7 +28,7 @@ Install the Supabase CLI, then from the repo root:
 supabase login
 supabase link --project-ref <your-project-ref>
 supabase secrets set TRIAL_SALT=$(openssl rand -hex 16)
-supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=500 RAZORPAY_CURRENCY=USD
+supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=500 RAZORPAY_INR_AMOUNT_MINOR=44900
 supabase secrets set SUCCESS_URL=https://your-site.com/thanks CANCEL_URL=https://your-site.com
 supabase functions deploy trial
 supabase functions deploy create-checkout
@@ -40,7 +40,7 @@ supabase functions deploy razorpay-webhook --no-verify-jwt
 1. Create a Razorpay account and finish KYC (needed for live payments).
 2. **Settings → API Keys**: generate a key; put the id and secret in the secrets above.
 3. **Settings → Webhooks → Add**: URL `https://<project-ref>.supabase.co/functions/v1/razorpay-webhook`, a secret you choose (= `RAZORPAY_WEBHOOK_SECRET`), event **payment_link.paid**.
-4. The price is charged in **USD**: `RAZORPAY_AMOUNT_MINOR=500` (cents) and `RAZORPAY_CURRENCY=USD`. USD payment links need **International Payments** switched on for your Razorpay account (Settings → Configuration). Keep `priceLabel` in `src/core/cloud/config.ts` in step with it.
+4. Two prices are offered and the buyer picks one: **₹449** (`RAZORPAY_INR_AMOUNT_MINOR=44900`, paise) unlocks UPI, netbanking, wallets and Indian cards, and **$5** (`RAZORPAY_AMOUNT_MINOR=500`, cents) is for international cards. Razorpay only offers UPI/netbanking/wallets on rupee payments. USD links need **International Payments** switched on in Razorpay. Keep `priceLabel` and `priceInrLabel` in `src/core/cloud/config.ts` (and `price`, `priceInr` in the website's `config.ts`) in step with the server amounts.
 
 ## 4. Keep the free database awake
 

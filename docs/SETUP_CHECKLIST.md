@@ -18,7 +18,7 @@ Everything below uses free plans. Payment providers only take a small fee per pa
 ```bash
 supabase secrets set TRIAL_SALT=$(openssl rand -hex 16)
 supabase secrets set SUCCESS_URL=https://<your-site>/ CANCEL_URL=https://<your-site>/
-supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=500 RAZORPAY_CURRENCY=USD
+supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=500 RAZORPAY_INR_AMOUNT_MINOR=44900
 supabase functions deploy trial
 supabase functions deploy create-checkout
 supabase functions deploy razorpay-webhook --no-verify-jwt
