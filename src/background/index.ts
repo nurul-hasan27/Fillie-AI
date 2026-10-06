@@ -815,7 +815,12 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
     }
     case 'fillie:refresh-payment': {
       const session = await cloud.getSession();
-      if (session) await access.isPaid(session.user.id, { force: true });
+      if (session) {
+        // Ask the server to check with the payment provider first, so a payment still shows up
+        // even if the provider's webhook never reached us. Best effort: the licence check below decides.
+        await cloud.json('/functions/v1/confirm-payment', { method: 'POST', body: '{}' }, { timeoutMs: 8000 }).catch(() => undefined);
+        await access.isPaid(session.user.id, { force: true });
+      }
       return handleAccountStatus(message.device);
     }
     case 'fillie:backup-now':
