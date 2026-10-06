@@ -31,7 +31,7 @@ const cssTextLoader = {
 async function copyStatic() {
   await mkdir(path.join(dist, 'pages'), { recursive: true });
   await cp(path.join(src, 'manifest.json'), path.join(dist, 'manifest.json'));
-  for (const page of ['popup.html', 'app.html']) {
+  for (const page of ['popup.html', 'app.html', 'auth-callback.html']) {
     await cp(path.join(src, 'pages', page), path.join(dist, 'pages', page));
   }
   await cp(path.join(src, 'assets'), path.join(dist, 'assets'), { recursive: true });
@@ -101,6 +101,7 @@ async function bundle() {
       entryPoints: {
         popup: path.join(src, 'pages/popup.ts'),
         app: path.join(src, 'pages/app.ts'),
+        'auth-callback': path.join(src, 'pages/auth-callback.ts'),
       },
       outdir: path.join(dist, 'pages'),
       format: 'esm',

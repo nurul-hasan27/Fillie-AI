@@ -171,6 +171,8 @@ export type BackgroundMessage =
   | { type: 'fillie:begin-run'; url: string; device: DeviceHashes }
   | { type: 'fillie:sign-in'; mode: 'signin' | 'signup'; email: string; password: string }
   | { type: 'fillie:sign-in-oauth'; provider: OAuthProvider }
+  | { type: 'fillie:auth-callback'; url: string }
+  | { type: 'fillie:auth-popup'; url: string }
   | { type: 'fillie:sign-out' }
   | { type: 'fillie:checkout'; provider: 'stripe' | 'razorpay' }
   | { type: 'fillie:feedback'; rating: number | null; kind: 'review' | 'bug' | 'idea'; message: string }

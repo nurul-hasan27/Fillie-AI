@@ -8,7 +8,7 @@ Everything below uses free plans. Payment providers only take a small fee per pa
 3. Authentication → **Sign In / Providers**: turn on **Email** (enable "Confirm email"), **Google**, **GitHub** and **Apple**. Each needs a client id/secret from its console (Apple: Services ID + key from your developer account). Add Google first; the admin dashboard needs it.
 4. Authentication → **URL Configuration**:
    - Site URL: your Vercel site.
-   - Redirect URLs: `https://<your-site>/admin` and `https://<EXTENSION_ID>.chromiumapp.org/`.
+   - Redirect URLs: `https://<your-site>/admin` and `chrome-extension://<EXTENSION_ID>/pages/auth-callback.html`.
 5. Install the CLI (`npm i -g supabase`), then `supabase login` and `supabase link --project-ref <ref>`.
 
 ## B. Payments
@@ -32,7 +32,7 @@ Test with Stripe test keys and card `4242 4242 4242 4242` and Razorpay test mode
 1. Put the Project URL and anon key in `src/core/cloud/config.ts`. Check `razorpayLabel` matches `RAZORPAY_AMOUNT_MINOR`.
 2. `npm run package` (it refuses while placeholders remain). This creates `release/fillie-extension.zip`.
 3. Chrome Web Store developer dashboard (one-time $5 fee): upload the zip, add screenshots, a **privacy policy URL**, and the data-use disclosures (email, hashed device id for the free-trial count, backed-up profile data; API keys stay on the device). Submit for review.
-4. When approved, copy the extension ID and (a) add `https://<EXTENSION_ID>.chromiumapp.org/` to the Supabase redirect URLs, (b) paste the store URL into the website config.
+4. When approved, copy the extension ID and (a) add `chrome-extension://<EXTENSION_ID>/pages/auth-callback.html` to the Supabase redirect URLs, (b) paste the store URL into the website config.
 
 ## E. Website (fillie-website repo)
 1. Edit `src/config.ts`: `storeUrl`, `SUPABASE.url`, `SUPABASE.anonKey`. Keep `ADMIN_EMAIL`.

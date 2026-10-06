@@ -525,21 +525,91 @@ async function handleSignIn(message: Extract<BackgroundMessage, { type: 'fillie:
   }
 }
 
+/* ---- Sign-in popup ---------------------------------------------------- */
+
+const AUTH_WINDOW = { width: 480, height: 720 };
+const AUTH_TIMEOUT_MS = 5 * 60 * 1000;
+
+interface PendingAuth {
+  windowId: number;
+  resolve(url: string): void;
+  reject(error: Error): void;
+}
+let pendingAuth: PendingAuth | null = null;
+
+/**
+ * Opens the provider's sign-in page in a small window centred over the browser
+ * (not a tab) and resolves with the address it ends on. The provider redirects
+ * to the extension's own auth-callback page, which reports back here and lets us
+ * close the window. Closing the window cancels the sign-in.
+ */
+async function openAuthPopup(url: string): Promise<string> {
+  const api = (globalThis as { chrome?: typeof chrome }).chrome;
+  if (!api?.windows) throw new CloudError('Sign-in is not available here.');
+  pendingAuth?.reject(new CloudError('Sign-in was cancelled.'));
+
+  const parent = await api.windows.getLastFocused().catch(() => undefined);
+  const left = Math.max(0, Math.round((parent?.left ?? 0) + ((parent?.width ?? 1200) - AUTH_WINDOW.width) / 2));
+  const top = Math.max(0, Math.round((parent?.top ?? 0) + ((parent?.height ?? 800) - AUTH_WINDOW.height) / 2));
+  const created = await api.windows.create({ url, type: 'popup', focused: true, left, top, ...AUTH_WINDOW });
+  if (created?.id === undefined) throw new CloudError('Could not open the sign-in window.');
+  const windowId = created.id;
+
+  return new Promise<string>((resolve, reject) => {
+    const finish = () => {
+      clearTimeout(timer);
+      api.windows.onRemoved.removeListener(onRemoved);
+      if (pendingAuth?.windowId === windowId) pendingAuth = null;
+    };
+    const onRemoved = (id: number) => {
+      if (id !== windowId) return;
+      finish();
+      reject(new CloudError('Sign-in was cancelled.'));
+    };
+    const timer = setTimeout(() => {
+      finish();
+      void api.windows.remove(windowId).catch(() => undefined);
+      reject(new CloudError('Sign-in timed out. Please try again.'));
+    }, AUTH_TIMEOUT_MS);
+    api.windows.onRemoved.addListener(onRemoved);
+    pendingAuth = {
+      windowId,
+      resolve: (redirected) => {
+        finish();
+        void api.windows.remove(windowId).catch(() => undefined);
+        resolve(redirected);
+      },
+      reject: (error) => {
+        finish();
+        void api.windows.remove(windowId).catch(() => undefined);
+        reject(error);
+      },
+    };
+  });
+}
+
+/** Called by the extension's own auth-callback page. Anything else is ignored. */
+function handleAuthCallback(url: string, sender: { id?: string; url?: string }): { ok: boolean } {
+  const api = (globalThis as { chrome?: typeof chrome }).chrome;
+  const callback = api?.runtime.getURL('pages/auth-callback.html') ?? '';
+  if (sender.id !== api?.runtime.id || !sender.url?.startsWith(callback) || !url.startsWith(callback)) return { ok: false };
+  pendingAuth?.resolve(url);
+  return { ok: Boolean(pendingAuth) };
+}
+
 async function handleOAuth(provider: OAuthProvider) {
-  const identity = (globalThis as { chrome?: typeof chrome }).chrome?.identity;
-  if (!identity) return { ok: false, error: 'Sign-in is not available here.' };
+  const api = (globalThis as { chrome?: typeof chrome }).chrome;
+  const callbackUrl = api?.runtime.getURL('pages/auth-callback.html') ?? '';
   try {
-    const redirectTo = identity.getRedirectURL();
-    const redirected = await identity.launchWebAuthFlow({ url: cloud.oauthUrl(provider, redirectTo), interactive: true });
-    if (!redirected) return { ok: false, error: 'Sign-in was cancelled.' };
+    const redirected = await openAuthPopup(cloud.oauthUrl(provider, callbackUrl));
     await cloud.completeOAuth(redirected, provider);
     await afterSignIn();
     return { ok: true };
   } catch (error) {
-    // The most common setup mistake: this exact address is missing from Supabase's Redirect URLs.
-    const hint = ` Make sure ${identity.getRedirectURL()} is listed under Authentication > URL Configuration > Redirect URLs in Supabase.`;
     const base = authError(error);
-    return /cancel|closed|did not approve/i.test(base.error) ? base : { ok: false as const, error: base.error + hint };
+    // The most common setup mistake: this exact address is missing from Supabase's Redirect URLs.
+    const hint = ` Make sure ${callbackUrl} is listed under Authentication > URL Configuration > Redirect URLs in Supabase.`;
+    return /cancel|closed|timed out/i.test(base.error) ? base : { ok: false as const, error: base.error + hint };
   }
 }
 
@@ -672,7 +742,7 @@ function scheduleBackup(): void {
   }, 20_000);
 }
 
-async function dispatch(message: BackgroundMessage): Promise<unknown> {
+async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.MessageSender): Promise<unknown> {
   switch (message.type) {
     case 'fillie:get-status':
       return handleStatus();
@@ -722,6 +792,12 @@ async function dispatch(message: BackgroundMessage): Promise<unknown> {
       return handleSignIn(message);
     case 'fillie:sign-in-oauth':
       return handleOAuth(message.provider);
+    case 'fillie:auth-popup':
+      // Test/diagnostic entry point: only our own pages (not content scripts) and only trusted hosts.
+      if (!sender?.url?.startsWith(`chrome-extension://${sender.id}/`) || !/^(https:\/\/[^/]+\.supabase\.co\/|http:\/\/127\.0\.0\.1[:/])/.test(message.url)) return { ok: false };
+      return openAuthPopup(message.url).then((url) => ({ ok: true, url }), (e: Error) => ({ ok: false, error: e.message }));
+    case 'fillie:auth-callback':
+      return handleAuthCallback(message.url, { id: sender?.id, url: sender?.url });
     case 'fillie:sign-out':
       await cloud.signOut();
       return { ok: true };
@@ -779,7 +855,7 @@ const commands = chromeApi?.commands;
 if (runtime?.onMessage) {
   runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== 'string' || !message.type.startsWith('fillie:')) return false;
-    dispatch(message as BackgroundMessage)
+    dispatch(message as BackgroundMessage, _sender)
       .then((result) => sendResponse(result))
       .catch((error: unknown) => {
         // Never leak a stack trace or an API key to the caller.
