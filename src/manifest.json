@@ -48,6 +48,12 @@
     "https://api.cerebras.ai/*",
     "https://*.supabase.co/*"
   ],
+  "web_accessible_resources": [
+    {
+      "resources": ["pages/auth-callback.html"],
+      "matches": ["https://*/*", "http://127.0.0.1/*"]
+    }
+  ],
   "commands": {
     "run-fillie": {
       "suggested_key": {

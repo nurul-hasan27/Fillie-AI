@@ -17,7 +17,7 @@ Fillie's accounts, application database, backup, free-trial counter, payments an
 3. **Authentication → Providers**: enable Email, Google, GitHub and (optionally) Apple.
    - Google/GitHub: create an OAuth app in each console and paste the client id and secret.
    - Apple: needs your Apple Developer account (Services ID, key and team ID, entered in Supabase's Apple provider form).
-4. **Authentication → URL configuration → Redirect URLs**: add `https://<EXTENSION_ID>.chromiumapp.org/`. Your extension ID is shown on `chrome://extensions` (it is fixed once the extension is published; for local testing, use the ID of your unpacked copy).
+4. **Authentication → URL configuration → Redirect URLs**: add `chrome-extension://<EXTENSION_ID>/pages/auth-callback.html`. Your extension ID is shown on `chrome://extensions` (it is fixed once the extension is published; for local testing, use the ID of your unpacked copy).
 5. Copy the **Project URL** and **anon public key** into `src/core/cloud/config.ts`. The anon key is public by design; never put the `service_role` key in the extension.
 
 ## 2. Edge Functions

@@ -159,3 +159,53 @@ test.describe('resume choice', () => {
     expect(await note.evaluate((el) => getComputedStyle(el).fontStyle)).toBe('italic');
   });
 });
+
+test.describe('sign-in popup', () => {
+  test('opens a small centred window (not a tab), and closes it when the provider redirects back', async ({ fillie }) => {
+    const callback = `chrome-extension://${fillie.extensionId}/pages/auth-callback.html#access_token=at&refresh_token=rt&expires_in=3600`;
+    const start = `http://127.0.0.1:4321/mock-auth/redirect?delay=2500&to=${encodeURIComponent(callback)}`;
+    const tabsBefore = fillie.context.pages().length;
+
+    // Watch the browser's windows while the sign-in runs, since the popup lives only a moment.
+    const watcher = fillie.control.evaluate(async () => {
+      const seen = new Set<string>();
+      for (let i = 0; i < 40; i += 1) {
+        for (const w of await chrome.windows.getAll()) seen.add(String(w.type));
+        await new Promise((resolve) => setTimeout(resolve, 100));
+      }
+      return [...seen];
+    });
+
+    // What the Google/GitHub/Apple buttons do, against a local stand-in for the provider.
+    const pending = fillie.sendToWorker<{ ok: boolean; url?: string; error?: string }>({ type: 'fillie:auth-popup', url: start });
+    const popup = await fillie.context.waitForEvent('page', { timeout: 15_000 });
+
+    // A separate popup-type window appeared. (Headless Chromium ignores the requested 480x720 size; real browsers honour it.)
+    expect(await watcher).toContain('popup');
+
+    const result = await pending;
+    expect(result.ok).toBe(true);
+    expect(result.url).toContain('access_token=at');
+
+    // The popup closes by itself and no stray tab is left behind.
+    await expect.poll(() => popup.isClosed(), { timeout: 15_000 }).toBe(true);
+    expect(fillie.context.pages().length).toBe(tabsBefore);
+  });
+
+  test('closing the popup cancels the sign-in', async ({ fillie }) => {
+    const pending = fillie.sendToWorker<{ ok: boolean; error?: string }>({
+      type: 'fillie:auth-popup',
+      url: 'http://127.0.0.1:4321/health',
+    });
+    const popup = await fillie.context.waitForEvent('page', { timeout: 15_000 });
+    await popup.close();
+    const result = await pending;
+    expect(result.ok).toBe(false);
+    expect(result.error).toMatch(/cancel/i);
+  });
+
+  test('a web page cannot trigger the callback', async ({ fillie }) => {
+    const reply = await fillie.sendToWorker<{ ok: boolean }>({ type: 'fillie:auth-callback', url: 'https://evil.example/#access_token=x' });
+    expect(reply.ok).toBe(false);
+  });
+});

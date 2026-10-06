@@ -27,6 +27,15 @@ const server = createServer(async (req, res) => {
     return;
   }
   // A deterministic stand-in for a hosted provider, used by the E2E AI tests.
+  // Stand-in for an OAuth provider: an HTTP 302 to wherever `to` says, like Supabase's redirect.
+  if (url.pathname === '/mock-auth/redirect') {
+    // `delay` keeps the window open long enough for a test to look at it.
+    await new Promise((resolve) => setTimeout(resolve, Number(url.searchParams.get('delay') ?? 0)));
+    res.writeHead(302, { Location: url.searchParams.get('to') ?? '/' });
+    res.end();
+    return;
+  }
+
   if (url.pathname.startsWith('/mock-ai')) {
     if (req.method === 'GET' && url.pathname === '/mock-ai') {
       res.writeHead(200, { 'content-type': 'application/json; charset=utf-8' });
