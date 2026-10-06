@@ -9,6 +9,7 @@ export interface AccountState {
   status: AccountStatus | null;
   mode: 'signin' | 'signup';
   busy: string;
+  feedbackRating: number;
   message?: { tone: 'info' | 'danger'; text: string };
 }
 
@@ -35,8 +36,9 @@ function planCard(status: AccountStatus): TemplateResult {
         <div class="dots" aria-hidden="true">${dots}</div>
         <div class="row-wrap" style="margin-top:14px">
           ${access.signedIn
-            ? html`<button class="ff-btn ff-btn-primary ff-btn-lg" type="button" data-action="checkout" ${status.cloudConfigured ? '' : 'disabled'}>Unlock for ${escapeHtml(priceLabel.replace(' one-time', ''))}</button>
-                   <button class="ff-btn ff-btn-secondary" type="button" data-action="refresh-payment">I have paid</button>`
+            ? html`<button class="ff-btn ff-btn-primary ff-btn-lg" type="button" data-action="checkout" data-provider="stripe" ${status.cloudConfigured ? '' : 'disabled'}>Pay ${escapeHtml(priceLabel.replace(' one-time', ''))} by card</button>
+                   <button class="ff-btn ff-btn-secondary ff-btn-lg" type="button" data-action="checkout" data-provider="razorpay" ${status.cloudConfigured ? '' : 'disabled'}>UPI / cards · ${escapeHtml(status.razorpayLabel)}</button>
+                   <button class="ff-btn ff-btn-ghost" type="button" data-action="refresh-payment">I have paid</button>`
             : html`<span class="hero-pill">Sign in below to unlock</span>`}
         </div>
       </div>
@@ -92,6 +94,35 @@ function signedIn(status: AccountStatus): TemplateResult {
         </div>
       </div>
     </section>
+    <section class="ff-card">
+      <div class="card-pad-lg stack-md">
+        <h2 class="ff-title">Got an offer?</h2>
+        <label class="ff-switch">
+          <input type="checkbox" data-action="toggle-share-offers" ${status.shareOffers ? 'checked' : ''} />
+          <span class="ff-switch-track"><span class="ff-switch-thumb"></span></span>
+          <span class="ff-body">Let Fillie share my offers (company, role, package) as success stories, with my email visible to the Fillie team.</span>
+        </label>
+        <p class="ff-hint">Off by default. Without this, your offers only count in anonymous totals.</p>
+      </div>
+    </section>
+  `;
+}
+
+function feedbackCard(state: AccountState): TemplateResult {
+  return html`
+    <section class="ff-card">
+      <div class="card-pad-lg stack-md">
+        <h2 class="ff-title">Rate Fillie</h2>
+        <div class="stars" role="group" aria-label="Your rating">
+          ${[1, 2, 3, 4, 5].map((n) => html`<button class="star" type="button" data-action="feedback-star" data-value="${n}" data-on="${String(state.feedbackRating >= n)}" aria-label="${n} star${n > 1 ? 's' : ''}" style="font-size:26px">★</button>`)}
+        </div>
+        <div class="ff-field"><label class="ff-field-label" for="fb-kind">About</label>
+          <select class="ff-select" id="fb-kind"><option value="review">A review</option><option value="bug">A bug</option><option value="idea">An idea</option></select></div>
+        <div class="ff-field"><label class="ff-field-label" for="fb-message">What do you think?</label>
+          <textarea class="ff-textarea" id="fb-message" rows="3" maxlength="2000" placeholder="What worked, what did not…"></textarea></div>
+        <div class="row-wrap"><button class="ff-btn ff-btn-primary" type="button" data-action="send-feedback">Send feedback</button></div>
+      </div>
+    </section>
   `;
 }
 
@@ -105,7 +136,7 @@ export function accountView(state: AccountState): TemplateResult {
       : html`
           ${status.cloudConfigured ? '' : banner({ tone: 'warning', title: 'Cloud is not set up', body: 'This is a development build, so Fillie is unlimited and sign-in is off. Add your Supabase keys in src/core/cloud/config.ts.' })}
           ${planCard(status)}
-          ${status.access.signedIn ? signedIn(status) : status.cloudConfigured ? signIn(state) : ''}
+          ${status.access.signedIn ? html`${signedIn(status)}${feedbackCard(state)}` : status.cloudConfigured ? signIn(state) : ''}
         `}
   `;
 }

@@ -1231,3 +1231,8 @@
   .db-actions { width: 100%; }
   .db-actions .ff-input { flex: 1; width: auto; }
 }
+
+.app-resume em {
+  font-style: italic;
+  color: var(--ff-text-secondary);
+}

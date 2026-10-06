@@ -34,8 +34,17 @@ Deno.serve(async (req) => {
     LIMIT,
   );
 
+  // Accuracy report: how many answers Fillie wrote and how many the user then changed.
+  if (body.action === 'report') {
+    const filled = Math.min(Math.max(Math.trunc(Number(body.filled) || 0), 0), 500);
+    const edited = Math.min(Math.max(Math.trunc(Number(body.edited) || 0), 0), filled);
+    if (filled > 0) await admin.from('usage_events').insert({ device: body.hw, kind: 'quality', filled, edited });
+    return reply({ ok: true });
+  }
+
   if (body.action === 'consume' && decision.allowed) {
     await Promise.all(Object.values(keys).map((key) => admin.rpc('increment_trial', { p_key: key, p_week: week })));
+    await admin.from('usage_events').insert({ device: body.hw, kind: 'fill' });
     return reply({ ...decision, remaining: decision.remaining - 1 });
   }
   return reply(decision);

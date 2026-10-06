@@ -246,6 +246,12 @@ async function run(): Promise<void> {
     state.fields = new Map(fields.map((field) => [field.id, field]));
     state.context = buildContext(fields);
 
+    // Straight after Alt+Shift+F: with several resumes, ask which one fits this role
+    // before anything is spent or sent.
+    const resumeId = await chooseResume();
+    if (resumeId === null) return; // the user closed Fillie at the picker
+    state.resumeId = resumeId;
+
     // Free users get a few fillings a week; the server counts them per device.
     const access = await checkAccess();
     if (!access.allowed) {
@@ -263,10 +269,6 @@ async function run(): Promise<void> {
 
     // Read the real option list of dropdowns that only populate when opened.
     await hydrateCustomSelects(fields);
-
-    const resumeId = await chooseResume();
-    if (resumeId === null) return; // the user closed Fillie at the picker
-    state.resumeId = resumeId;
 
     renderScanning('Reading the form', fields.length, fields.length, true);
     const response = await sendMessage<PlanResponse>({
@@ -705,6 +707,28 @@ function planNote(access: AccessState): string {
   return `${left} free ${left === 1 ? 'filling' : 'fillings'} left this week`;
 }
 
+/**
+ * Counts, not content: how many answers Fillie wrote and how many the user then
+ * changed before submitting. It is the accuracy figure on the admin dashboard.
+ */
+async function reportQuality(): Promise<void> {
+  let filled = 0;
+  let edited = 0;
+  for (const plan of state.plans) {
+    const field = state.fields.get(plan.field.id);
+    // Only free-text kinds: a select, radio or date is re-formatted by the page, which would look like an edit.
+    if (!field || !plan.fillResult?.filled || field.sensitive || !['text', 'textarea', 'number', 'email', 'tel', 'url'].includes(field.kind)) continue;
+    filled += 1;
+    if (normaliseValue(readFieldValue(field)) !== normaliseValue(plan.answer)) edited += 1;
+  }
+  if (!filled) return;
+  try {
+    await sendMessage({ type: 'fillie:report-quality', filled, edited, device: await computeHashes() });
+  } catch {
+    /* analytics are best effort */
+  }
+}
+
 let tracked = false;
 
 /** Adds this application to the tracker, once per page. */
@@ -712,7 +736,8 @@ async function trackApplication(): Promise<void> {
   if (tracked || !state.plans.some((plan) => plan.fillResult?.filled)) return;
   tracked = true;
   try {
-    await sendMessage({ type: 'fillie:apps-track', context: state.context });
+    await sendMessage({ type: 'fillie:apps-track', context: state.context, resumeId: state.resumeId });
+    void reportQuality();
   } catch {
     tracked = false; // allow another try (e.g. from the button)
   }

@@ -36,6 +36,8 @@ export interface Application {
   ratingSource: 'ai' | 'user' | null;
   url: string;
   host: string;
+  /** Name of the resume used to fill the form; shown when the role could not be read. */
+  resumeName: string;
   updatedAt: number;
 }
 

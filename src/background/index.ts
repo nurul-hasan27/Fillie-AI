@@ -302,7 +302,7 @@ async function handleGenerate(payload: GenerateRequest): Promise<GenerateRespons
 
 /** Ranks the user's resumes against the job on the page, for the picker. */
 async function handleSuggestResume(context: ApplicationContext): Promise<ResumeSuggestion> {
-  const { resumes, defaultId } = await storage.getResumes();
+  const { resumes, defaultId } = await storage.getResumeChoices();
   const jobText = [context.role, context.pageTitle, context.department, context.jobDescription].filter(Boolean).join(' ');
   const options = rankResumes(resumes, jobText);
   // With no signal from the page, fall back to the user's own default.
@@ -492,6 +492,8 @@ async function handleAccountStatus(device: DeviceHashes): Promise<AccountStatus>
     access: await access.status(await deviceSignals(device)),
     pendingApplications: await applications.pendingCount(),
     priceLabel: CLOUD.priceLabel,
+    razorpayLabel: CLOUD.razorpayLabel,
+    shareOffers: await readShareOffers(),
     lastBackupAt: await storage.read<number>(BACKUP_AT_KEY),
   };
 }
@@ -538,9 +540,9 @@ async function handleOAuth(provider: OAuthProvider) {
   }
 }
 
-async function handleCheckout() {
+async function handleCheckout(provider: 'stripe' | 'razorpay') {
   try {
-    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: '{}' });
+    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: JSON.stringify({ provider }) });
     await (globalThis as { chrome?: typeof chrome }).chrome?.tabs?.create({ url });
     return { ok: true, url };
   } catch (error) {
@@ -570,19 +572,87 @@ async function handleRestoreNow() {
  * AI platform is configured, a short AI summary; a rating is only an AI guess
  * and stays editable.
  */
-async function handleTrack(context: ApplicationContext) {
+async function handleTrack(context: ApplicationContext, resumeId?: string) {
   const company = context.company?.trim() || context.host;
-  const role = context.role?.trim() || context.pageTitle.slice(0, 120) || 'Application';
+  const resumeName = await storage.getResumeName(resumeId);
+  // When the role cannot be read, the resume used is shown in its place.
+  const role = context.role?.trim() || (resumeName ? '' : context.pageTitle.slice(0, 120) || 'Application');
   const settings = await getSettings();
   const deps = await plannerDeps(settings);
   const { app, created } = await applications.track(
-    { company, role, url: context.url, host: context.host },
+    { company, role, url: context.url, host: context.host, resumeName },
     async () => {
       const intel = await suggestIntel(context, deps.send);
       return { notes: intel.notes, rating: intel.rating, ratingSource: intel.rating ? 'ai' : null };
     },
   );
   return { ok: true, created, app };
+}
+
+async function readShareOffers(): Promise<boolean> {
+  try {
+    const session = await cloud.getSession();
+    if (!session) return false;
+    const rows = await cloud.json<Array<{ share_offers: boolean }>>('/rest/v1/user_settings?select=share_offers&limit=1');
+    return Boolean(rows[0]?.share_offers);
+  } catch {
+    return false;
+  }
+}
+
+async function handleShareOffers(value: boolean) {
+  try {
+    const session = await cloud.getSession();
+    if (!session) return { ok: false, error: 'Sign in first.' };
+    await cloud.json('/rest/v1/user_settings?on_conflict=user_id', {
+      method: 'POST',
+      headers: { Prefer: 'resolution=merge-duplicates,return=minimal' },
+      body: JSON.stringify({ user_id: session.user.id, share_offers: value, updated_at: new Date().toISOString() }),
+    });
+    return { ok: true };
+  } catch (error) {
+    return authError(error);
+  }
+}
+
+async function handleFeedback(message: Extract<BackgroundMessage, { type: 'fillie:feedback' }>) {
+  try {
+    const session = await cloud.getSession();
+    if (!session) return { ok: false, error: 'Sign in to send feedback.' };
+    const rating = Number.isInteger(message.rating) && message.rating! >= 1 && message.rating! <= 5 ? message.rating : null;
+    const text = message.message.trim().slice(0, 2000);
+    if (!rating && !text) return { ok: false, error: 'Add a rating or a few words.' };
+    await cloud.json('/rest/v1/feedback', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ user_id: session.user.id, rating, kind: message.kind, message: text }),
+    });
+    return { ok: true };
+  } catch (error) {
+    return authError(error);
+  }
+}
+
+/** How many answers Fillie wrote and how many the user then had to change. Counts only, no content. */
+async function handleQuality(filled: number, edited: number, device: DeviceSignals) {
+  const safeFilled = Math.min(Math.max(Math.trunc(filled) || 0, 0), 500);
+  const safeEdited = Math.min(Math.max(Math.trunc(edited) || 0, 0), safeFilled);
+  if (!safeFilled || !isCloudConfigured()) return { ok: true };
+  try {
+    const session = await cloud.getSession();
+    if (session) {
+      await cloud.json('/rest/v1/usage_events', {
+        method: 'POST',
+        headers: { Prefer: 'return=minimal' },
+        body: JSON.stringify({ user_id: session.user.id, kind: 'quality', filled: safeFilled, edited: safeEdited }),
+      });
+    } else {
+      await cloud.json('/functions/v1/trial', { method: 'POST', body: JSON.stringify({ action: 'report', ...device, filled: safeFilled, edited: safeEdited }) }, { anonymous: true });
+    }
+  } catch {
+    /* analytics must never get in the way */
+  }
+  return { ok: true };
 }
 
 let backupTimer: ReturnType<typeof setTimeout> | null = null;
@@ -632,8 +702,19 @@ async function dispatch(message: BackgroundMessage): Promise<unknown> {
       return handleRememberBatch(message.payload);
     case 'fillie:account-status':
       return handleAccountStatus(message.device);
-    case 'fillie:begin-run':
-      return access.begin(await deviceSignals(message.device), message.url);
+    case 'fillie:begin-run': {
+      const state = await access.begin(await deviceSignals(message.device), message.url);
+      // Free fillings are logged by the trial function; paid ones are logged here.
+      if (state.allowed && state.plan === 'paid' && state.signedIn && isCloudConfigured()) {
+        const session = await cloud.getSession();
+        if (session) {
+          void cloud
+            .json('/rest/v1/usage_events', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: session.user.id, kind: 'fill' }) })
+            .catch(() => undefined);
+        }
+      }
+      return state;
+    }
     case 'fillie:sign-in':
       return handleSignIn(message);
     case 'fillie:sign-in-oauth':
@@ -642,7 +723,13 @@ async function dispatch(message: BackgroundMessage): Promise<unknown> {
       await cloud.signOut();
       return { ok: true };
     case 'fillie:checkout':
-      return handleCheckout();
+      return handleCheckout(message.provider);
+    case 'fillie:feedback':
+      return handleFeedback(message);
+    case 'fillie:set-share-offers':
+      return handleShareOffers(message.value);
+    case 'fillie:report-quality':
+      return handleQuality(message.filled, message.edited, await deviceSignals(message.device));
     case 'fillie:open-account': {
       const api = (globalThis as { chrome?: typeof chrome }).chrome;
       await api?.tabs?.create({ url: api.runtime.getURL('pages/app.html#/account') });
@@ -665,7 +752,7 @@ async function dispatch(message: BackgroundMessage): Promise<unknown> {
       await applications.remove(message.id);
       return { ok: true };
     case 'fillie:apps-track':
-      return handleTrack(message.context);
+      return handleTrack(message.context, message.resumeId);
     case 'fillie:get-memory':
       return storage.getMemory();
     case 'fillie:save-memory':
