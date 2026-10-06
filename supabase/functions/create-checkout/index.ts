@@ -1,7 +1,7 @@
 // Starts a checkout for the one-time payment, with Stripe (card, $5) or Razorpay (UPI/cards/netbanking, INR).
 // Deploy with: supabase functions deploy create-checkout
 // Secrets: SUCCESS_URL, CANCEL_URL, STRIPE_SECRET_KEY,
-//          RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_AMOUNT_MINOR (paise, e.g. 42000), RAZORPAY_CURRENCY (default INR)
+//          RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_AMOUNT_MINOR (paise, e.g. 44900), RAZORPAY_CURRENCY (default INR)
 import { corsHeaders, reply } from '../_shared/cors.ts';
 
 Deno.serve(async (req) => {
@@ -58,7 +58,7 @@ async function razorpay(user: { id: string; email?: string }): Promise<Response>
     method: 'POST',
     headers: { Authorization: `Basic ${btoa(`${keyId}:${keySecret}`)}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      amount: Number(Deno.env.get('RAZORPAY_AMOUNT_MINOR') ?? '42000'),
+      amount: Number(Deno.env.get('RAZORPAY_AMOUNT_MINOR') ?? '44900'),
       currency: Deno.env.get('RAZORPAY_CURRENCY') ?? 'INR',
       description: 'Fillie: lifetime access',
       reference_id: `${user.id.slice(0, 8)}-${Date.now()}`,

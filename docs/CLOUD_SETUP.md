@@ -29,7 +29,7 @@ supabase login
 supabase link --project-ref <your-project-ref>
 supabase secrets set TRIAL_SALT=$(openssl rand -hex 16)
 supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_WEBHOOK_SECRET=whsec_...
-supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=42000
+supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=44900
 supabase secrets set SUCCESS_URL=https://your-site.com/thanks CANCEL_URL=https://your-site.com
 supabase functions deploy trial
 supabase functions deploy create-checkout
@@ -48,7 +48,7 @@ supabase functions deploy razorpay-webhook --no-verify-jwt
 1. Create a Razorpay account and finish KYC (needed for live payments).
 2. **Settings → API Keys**: generate a key; put the id and secret in the secrets above.
 3. **Settings → Webhooks → Add**: URL `https://<project-ref>.supabase.co/functions/v1/razorpay-webhook`, a secret you choose (= `RAZORPAY_WEBHOOK_SECRET`), event **payment_link.paid**.
-4. Make `RAZORPAY_AMOUNT_MINOR` (paise) match `razorpayLabel` in `src/core/cloud/config.ts` (42000 paise = ₹420).
+4. Make `RAZORPAY_AMOUNT_MINOR` (paise) match `razorpayLabel` in `src/core/cloud/config.ts` (44900 paise = ₹449).
 
 ## 4. Keep the free database awake
 

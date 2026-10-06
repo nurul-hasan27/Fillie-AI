@@ -11,7 +11,7 @@ export const CLOUD = {
   freeFillsPerWeek: 3,
   priceLabel: '$5 one-time',
   /** Shown on the Razorpay (UPI / cards / netbanking) button. Match RAZORPAY_AMOUNT_MINOR on the server. */
-  razorpayLabel: '₹420',
+  razorpayLabel: '₹449',
   /** How many applications are fetched per page in the Database view. */
   pageSize: 100,
 };
