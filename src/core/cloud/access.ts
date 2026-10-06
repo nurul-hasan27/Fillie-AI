@@ -123,7 +123,7 @@ export class AccessService {
       const reply = await this.client.json<TrialReply>(
         '/functions/v1/trial',
         { method: 'POST', body: JSON.stringify({ action, ...device }) },
-        { anonymous: true },
+        { anonymous: true, timeoutMs: 4000 },
       );
       return reply;
     } catch {

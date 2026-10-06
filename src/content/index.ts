@@ -695,7 +695,10 @@ const PRICE_LABEL = '$5 one-time';
 /** If the check itself fails (service worker asleep, offline), do not lock the user out. */
 async function checkAccess(): Promise<AccessState> {
   try {
-    return await sendMessage<AccessState>({ type: 'fillie:begin-run', url: location.href, device: await computeHashes() });
+    const check = sendMessage<AccessState>({ type: 'fillie:begin-run', url: location.href, device: await computeHashes() });
+    // The worker already has its own deadlines; this is the last line of defence.
+    const give_up = new Promise<never>((_, reject) => setTimeout(() => reject(new Error('access check timed out')), 15_000));
+    return await Promise.race([check, give_up]);
   } catch {
     return { allowed: true, plan: 'trial', remaining: 0, limit: 0, signedIn: false };
   }
