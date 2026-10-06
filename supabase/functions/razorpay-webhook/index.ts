@@ -11,7 +11,11 @@ const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE
 Deno.serve(async (req) => {
   const payload = await req.text();
   const valid = await verifyRazorpaySignature(payload, req.headers.get('X-Razorpay-Signature'), Deno.env.get('RAZORPAY_WEBHOOK_SECRET') ?? '');
-  if (!valid) return new Response('invalid signature', { status: 400 });
+  if (!valid) {
+    // Almost always: RAZORPAY_WEBHOOK_SECRET differs from the secret typed into Razorpay's webhook form.
+    console.error(JSON.stringify({ event: 'razorpay_webhook_rejected', reason: 'bad or missing signature', has_signature: Boolean(req.headers.get('X-Razorpay-Signature')), has_secret: Boolean(Deno.env.get('RAZORPAY_WEBHOOK_SECRET')) }));
+    return new Response('invalid signature', { status: 400 });
+  }
 
   const event = JSON.parse(payload) as {
     event: string;
@@ -21,15 +25,23 @@ Deno.serve(async (req) => {
     };
   };
 
-  if (event.event === 'payment_link.paid') {
-    const link = event.payload?.payment_link?.entity;
-    const payment = event.payload?.payment?.entity;
-    const userId = link?.notes?.user_id;
-    if (link?.status === 'paid' && payment && userId) {
-      const result = await recordPayment(admin, { userId, provider: 'razorpay', ref: payment.id, amountMinor: payment.amount, currency: payment.currency });
-      // 500 makes Razorpay retry rather than drop a paid user.
-      if (!result.ok) return new Response('could not record payment', { status: 500 });
-    }
+  console.log(JSON.stringify({ event: 'razorpay_webhook_received', type: event.event }));
+
+  if (event.event !== 'payment_link.paid') {
+    // Another event selected in Razorpay's webhook settings; nothing to do, and not an error.
+    return new Response('ignored');
   }
+
+  const link = event.payload?.payment_link?.entity;
+  const payment = event.payload?.payment?.entity;
+  const userId = link?.notes?.user_id;
+  if (!(link?.status === 'paid' && payment && userId)) {
+    console.error(JSON.stringify({ event: 'razorpay_webhook_unusable', link_status: link?.status, has_payment: Boolean(payment), has_user_id: Boolean(userId) }));
+    return new Response('ignored');
+  }
+
+  const result = await recordPayment(admin, { userId, provider: 'razorpay', ref: payment.id, amountMinor: payment.amount, currency: payment.currency });
+  // 500 makes Razorpay retry rather than drop a paid user.
+  if (!result.ok) return new Response('could not record payment', { status: 500 });
   return new Response('ok');
 });

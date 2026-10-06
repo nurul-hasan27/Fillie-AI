@@ -272,3 +272,21 @@ describe('device fingerprint hashing', () => {
     }
   });
 });
+
+describe('paying and getting unlocked straight away', () => {
+  it('does not keep a user on the paywall after they pay', async () => {
+    const storage = new Storage();
+    await signedIn(storage);
+    let paid = false;
+    const base = fakeCloud();
+    const fetchImpl = (async (url: string, init?: RequestInit) =>
+      url.includes('/rest/v1/entitlements') ? json(paid ? [{ paid: true }] : []) : base.fetchImpl(url, init)) as unknown as FetchFn;
+    let now = 1_000_000;
+    const access = new AccessService(storage, new CloudClient(storage, { config, fetchImpl, now: () => now }), { config, now: () => now });
+
+    expect((await access.begin(device, 'https://a.com/1')).plan).toBe('trial');
+    paid = true; // the payment webhook has just unlocked them
+    now += 25_000; // a short time later, well inside the old 10-minute cache
+    expect(await access.begin(device, 'https://a.com/2')).toMatchObject({ allowed: true, plan: 'paid' });
+  });
+});

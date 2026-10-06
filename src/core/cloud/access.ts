@@ -98,7 +98,10 @@ export class AccessService {
   /** True when the signed-in user has paid. Falls back to the last known answer offline. */
   async isPaid(userId: string, options: { force?: boolean } = {}): Promise<boolean> {
     const cached = await this.storage.read<EntitlementCache>(CACHE_KEY);
-    const fresh = cached && cached.userId === userId && this.now() - cached.checkedAt < 10 * 60 * 1000;
+    // "Paid" can be trusted for a while; "not paid" only briefly, so a user who has just
+    // paid is not stuck on the paywall until a cache expires.
+    const ttl = cached?.paid ? 10 * 60 * 1000 : 20 * 1000;
+    const fresh = cached && cached.userId === userId && this.now() - cached.checkedAt < ttl;
     if (fresh && !options.force) return cached.paid;
     try {
       const rows = await this.client.json<Array<{ paid: boolean }>>(
