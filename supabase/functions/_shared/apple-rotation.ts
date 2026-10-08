@@ -27,7 +27,7 @@ export type RotationResult =
 
 const REQUIRED: Array<[keyof RotationEnv, string]> = [
   ['teamId', 'APPLE_TEAM_ID'], ['keyId', 'APPLE_KEY_ID'], ['servicesId', 'APPLE_SERVICES_ID'], ['privateKey', 'APPLE_PRIVATE_KEY'],
-  ['managementToken', 'SUPABASE_MANAGEMENT_TOKEN'], ['projectRef', 'SUPABASE_PROJECT_REF'],
+  ['managementToken', 'MANAGEMENT_ACCESS_TOKEN'], ['projectRef', 'project reference (derived from SUPABASE_URL)'],
 ];
 
 const days = (seconds: number) => Math.floor(seconds / 86_400);
@@ -46,7 +46,7 @@ export async function rotateAppleSecret(
 ): Promise<RotationResult> {
   const missing = REQUIRED.filter(([key]) => !env[key]).map(([, name]) => name);
   if (missing.length) return { ok: false, status: 500, error: 'Missing configuration.', missing };
-  if (!/^[a-z0-9]{20}$/.test(env.projectRef!)) return { ok: false, status: 500, error: 'SUPABASE_PROJECT_REF is not a valid project reference.' };
+  if (!/^[a-z0-9]{20}$/.test(env.projectRef!)) return { ok: false, status: 500, error: 'The project reference taken from SUPABASE_URL is not valid.' };
 
   const current = await store.getExpiry();
   const due = options.force === true || needsRotation(current, now, env.rotateBeforeDays ?? 45);
@@ -69,7 +69,7 @@ export async function rotateAppleSecret(
     body: JSON.stringify({ external_apple_secret: secret.token }),
   });
   if (!response.ok) {
-    return { ok: false, status: 502, error: `Supabase refused the update (HTTP ${response.status}). Check SUPABASE_MANAGEMENT_TOKEN and SUPABASE_PROJECT_REF.` };
+    return { ok: false, status: 502, error: `Supabase refused the update (HTTP ${response.status}). Check MANAGEMENT_ACCESS_TOKEN.` };
   }
 
   // Remember the expiry only after Supabase accepted the new secret, so a failure is retried on the next run.
