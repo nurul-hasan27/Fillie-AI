@@ -491,8 +491,10 @@ test.describe('popup polish', () => {
     await expect(popup.locator('html')).toHaveAttribute('data-theme', 'dark');
     await fillie.control.evaluate(() => chrome.storage.local.remove('fillie:theme'));
 
-    // The header is just the logo and the buttons, and the open-Fillie button stays inside the window.
-    expect(await popup.locator('.pop-name').count()).toBe(0);
+    // The header is the logo, the name and the buttons, and the open-Fillie button stays inside the window.
+    await expect(popup.locator('.pop-brand .pop-name')).toHaveText('Fillie');
+    expect(await popup.locator('.pop-mark').innerText()).toBe(''); // the logo stays a clean image
+    expect(await popup.locator('h1').count()).toBe(0);
     const box = await popup.locator('.pop-ext').boundingBox();
     expect(box!.x + box!.width).toBeLessThanOrEqual(380 - 8);
     expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
