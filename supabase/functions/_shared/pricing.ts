@@ -53,7 +53,10 @@ export function priceOrder(price: Price, promoBps: number, offerBps: number): Pr
   return { currency: price.currency, listMinor: list, promoOffMinor: promoOff, offerOffMinor: afterPromo - finalMinor, finalMinor };
 }
 
-/** Up to two codes (one promo, one offer), trimmed, upper-cased and de-duplicated. Anything else is dropped. */
+/**
+ * Up to three codes, trimmed, upper-cased and de-duplicated. One promo and one offer can be used together, so a third
+ * is only there to let a newly typed code replace one of the same kind. Anything else is dropped.
+ */
 export function parseCodes(input: unknown): string[] {
   if (!Array.isArray(input)) return [];
   const seen = new Set<string>();
@@ -61,7 +64,7 @@ export function parseCodes(input: unknown): string[] {
     if (typeof raw !== 'string') continue;
     const code = raw.replace(/\s+/g, '').toUpperCase();
     if (/^[A-Z0-9]{4,16}$/.test(code)) seen.add(code);
-    if (seen.size === 2) break;
+    if (seen.size === 3) break;
   }
   return [...seen];
 }

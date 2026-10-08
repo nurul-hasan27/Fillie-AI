@@ -13,7 +13,7 @@ Fillie's accounts, application database, backup, free-trial counter, payments an
 ## 1. Supabase project
 
 1. Create a project at supabase.com (free plan).
-2. **SQL editor**: run `supabase/migrations/0001_init.sql`, then `0002_payments_feedback_admin.sql`, then `0003_table_grants.sql`, then `0004_offered_ctc.sql` (without it the API roles have no table privileges and every request fails with `42501 permission denied`).
+2. **SQL editor**: run `supabase/migrations/0001_init.sql`, then `0002_payments_feedback_admin.sql`, then `0003_table_grants.sql`, then `0004_offered_ctc.sql`, then the influencer programme `0005_influencers.sql`, `0006_influencer_api.sql` and `0007_influencer_admin.sql` (see [INFLUENCERS.md](INFLUENCERS.md)) (without the grants the API roles have no table privileges and every request fails with `42501 permission denied`).
 3. **Authentication → Providers**: enable Email, Google, GitHub and (optionally) Apple.
    - Google/GitHub: create an OAuth app in each console and paste the client id and secret.
    - Apple: needs your Apple Developer account (Services ID, key and team ID, entered in Supabase's Apple provider form).

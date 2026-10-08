@@ -2,7 +2,7 @@
   "name": "fillie",
   "version": "1.1.0",
   "private": true,
-  "description": "Fillie — a personal AI form-filling assistant for Chrome.",
+  "description": "Fillie \u2014 a personal AI form-filling assistant for Chrome.",
   "type": "module",
   "scripts": {
     "clean": "node scripts/clean.mjs",
@@ -17,7 +17,8 @@
     "test:all": "npm run typecheck && npm run test:unit && npm run test:e2e",
     "verify": "npm run build && npm run test:all",
     "fixtures": "node scripts/make-fixture-documents.mjs",
-    "package": "node scripts/package.mjs"
+    "package": "node scripts/package.mjs",
+    "test:website": "playwright test -c playwright.website.config.ts"
   },
   "devDependencies": {
     "@electric-sql/pglite": "^0.5.8",

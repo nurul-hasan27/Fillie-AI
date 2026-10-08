@@ -1,27 +1,13 @@
 // @vitest-environment node
-import { readFileSync } from 'node:fs';
-import { join } from 'node:path';
-import { PGlite } from '@electric-sql/pglite';
+import type { PGlite } from '@electric-sql/pglite';
 import { beforeAll, describe, expect, it } from 'vitest';
+import { makeDb } from '../helpers/pg-backend';
 
 /**
  * Runs the real migrations against an in-memory Postgres (PGlite) with a tiny stand-in for
  * Supabase's auth and storage schemas, then drives the influencer programme end to end:
  * codes, checkout, commissions, balances, tax, withdrawals, deletion, fraud flags and permissions.
  */
-
-const STUBS = `
-  create role anon nologin; create role authenticated nologin; create role service_role nologin;
-  create schema auth; create schema storage;
-  create table auth.users (id uuid primary key default gen_random_uuid(), email text, created_at timestamptz not null default now(), last_sign_in_at timestamptz);
-  create table auth.identities (id uuid primary key default gen_random_uuid(), user_id uuid, provider text, identity_data jsonb);
-  create function auth.uid() returns uuid language sql stable as $$ select nullif(current_setting('request.uid', true), '')::uuid $$;
-  create table storage.buckets (id text primary key, name text, public boolean, file_size_limit int, allowed_mime_types text[]);
-  create table storage.objects (id uuid primary key default gen_random_uuid(), bucket_id text, name text);
-  alter table storage.objects enable row level security;
-  create function storage.foldername(name text) returns text[] language sql immutable as $$ select string_to_array(name, '/') $$;
-  grant usage on schema auth, storage to anon, authenticated, service_role;
-`;
 
 let db: PGlite;
 const ids: Record<string, string> = {};
@@ -61,11 +47,7 @@ async function order(userId: string | null, codeId: string, ref: string, amount 
 }
 
 beforeAll(async () => {
-  db = new PGlite();
-  await db.exec(STUBS);
-  for (const file of ['0001_init', '0002_payments_feedback_admin', '0003_table_grants', '0004_offered_ctc', '0005_influencers', '0006_influencer_api', '0007_influencer_admin']) {
-    await db.exec(readFileSync(join(process.cwd(), 'supabase/migrations', `${file}.sql`), 'utf8'));
-  }
+  db = await makeDb();
   ids.admin = await user('mdnurulhasan1111@gmail.com');
   await db.query(`insert into auth.identities (user_id, provider, identity_data) values ($1, 'google', '{"email":"mdnurulhasan1111@gmail.com","email_verified":true}')`, [ids.admin]);
   ids.asha = await user('asha@example.com');

@@ -293,6 +293,7 @@ begin
         select id, currency, gross_minor, tds_minor, fee_minor, net_minor, status, method, requested_at, paid_at, payout_reference,
                case when status = 'rejected' then admin_note else '' end as note
           from public.withdrawals where influencer_id = me order by requested_at desc limit 50) w), '[]'::jsonb),
+    'status_counts', coalesce((select jsonb_object_agg(status, n) from (select status, count(*) n from public.commissions where influencer_id = me group by status) s), '{}'::jsonb),
     'refund_window_days', coalesce((public._setting('refund_window_days') #>> '{}')::int, 7)
   ) into result;
   return result;

@@ -57,8 +57,8 @@ describe('discounts', () => {
     expect(order.listMinor - order.promoOffMinor - order.offerOffMinor).toBe(100);
   });
 
-  it('accepts at most two well-formed codes and ignores the rest', () => {
-    expect(parseCodes([' ravi 10 ', 'diwali5', 'third123'])).toEqual(['RAVI10', 'DIWALI5']);
+  it('accepts at most three well-formed codes and ignores the rest', () => {
+    expect(parseCodes([' ravi 10 ', 'diwali5', 'third123', 'fourth12'])).toEqual(['RAVI10', 'DIWALI5', 'THIRD123']);
     expect(parseCodes(['ab', 'x'.repeat(20), 7, null, 'ok-no', 'RAVI10', 'ravi10'])).toEqual(['RAVI10']);
     expect(parseCodes('RAVI10')).toEqual([]);
     expect(parseCodes(undefined)).toEqual([]);

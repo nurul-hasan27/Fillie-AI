@@ -44,7 +44,8 @@ Deno.serve(async (req) => {
 
   if (body.quote) return reply({ order, applied: applied.map(({ kind, code, discount_bps, title }) => ({ kind, code, discount_bps, title })), rejected });
   // Never charge a different price than the buyer saw: a code that no longer works stops the payment.
-  if (rejected.length) return reply({ error: 'A code you entered can no longer be used. Remove it and try again.', rejected }, 409);
+  const refused = rejected.filter((r) => r.reason !== 'same_kind');
+  if (refused.length) return reply({ error: 'A code you entered can no longer be used. Remove it and try again.', rejected: refused }, 409);
   return razorpay(user, order, promo, offer);
 });
 
