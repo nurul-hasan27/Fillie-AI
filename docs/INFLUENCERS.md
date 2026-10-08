@@ -12,6 +12,8 @@ Creators join at **/influencer**, get a promo code, and earn commission on every
 | Withdrawal | The creator withdraws their whole available balance (minimum ₹500 / $10). They see the exact amount that reaches their bank *before* confirming. |
 | Payout | You review the request in **Influencers → Withdrawal management**: **Approve**, send the money from your bank app, then **Mark as paid** with the transfer reference (UTR). Or **Reject** with a reason, and the money returns to the creator's balance. |
 
+Customers can enter codes in two places: the payment window on the website, and **Account** in the extension. Both show every applied code with how much it takes off (in ₹ and $), the price before and after, and the amount to pay, all worked out by the server. A confetti burst plays when a payment is confirmed.
+
 Everything above is a setting, not code: **Influencers → Programme settings** (discount %, commission %, refund window, minimum withdrawal, TDS, transfer fee, codes per creator).
 
 ### What is deducted at payout

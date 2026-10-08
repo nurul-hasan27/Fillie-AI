@@ -3,6 +3,7 @@ import { computeHashes } from '../core/cloud/fingerprint';
 import { sendMessage, type ContentPingResponse } from '../shared/messages';
 import { escapeHtml, html, preferredTheme, setTheme, type TemplateResult } from '../ui/dom';
 import { icon } from '../ui/icons';
+import { resumeArt, sized, sparkArt } from '../ui/art';
 import { VERSION } from '../shared/version';
 import type { TrackerSummary } from '../core/cloud/applications';
 import { PROVIDER_PRESETS } from '../core/ai/presets';
@@ -13,6 +14,9 @@ import { PROVIDER_PRESETS } from '../core/ai/presets';
  */
 
 const app = document.getElementById('app')!;
+
+/** Inline markup that is already safe (our own illustrations), so the template does not escape it. */
+const raw = (markup: string): TemplateResult => ({ __html: markup, nodes: [] });
 
 const CROWN = html`<svg class="pop-crown" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M3 8l4.6 4.2L12 5l4.4 7.2L21 8l-2 10.5H5L3 8zm2 12h14v1.5H5V20z" /></svg>`;
 
@@ -114,7 +118,7 @@ function render(state: {
       ${header}
       <div class="pop-body">
         <div class="pop-scanning">
-          <div class="pop-orb" data-icon="sparkle"></div>
+          <div class="pop-orb">${raw(sized(sparkArt, 72))}</div>
           <p class="ff-heading">Working on this page…</p>
           <p class="ff-meta">${escapeHtml(state.message ?? 'Scanning the form.')}</p>
           <div class="ff-progress"><span class="ff-progress-bar ff-progress-bar--indeterminate"></span></div>
@@ -140,7 +144,7 @@ function render(state: {
       ${header}
       <div class="pop-body">
         <div class="pop-hero">
-          <div class="pop-orb" data-icon="sparkles"></div>
+          <div class="pop-orb">${raw(sized(resumeArt, 64))}</div>
           <h1 class="ff-display">Tell Fillie about you once</h1>
           <p class="ff-body ff-secondary">
             Add your education, experience, projects and preferences. Fillie then answers most application
@@ -213,7 +217,7 @@ function render(state: {
       </section>
 
       <button class="pop-cta rise" style="--i:3" data-action="run" type="button" ${state.pageOk ? '' : 'disabled'}>
-        <span class="pop-cta-icon" data-icon="sparkle"></span>
+        <span class="pop-cta-icon">${raw(sized(sparkArt, 34))}</span>
         <span class="pop-cta-body">
           <strong>${state.pageOk ? 'Fill this page' : 'No form on this page'}</strong>
           <span class="ff-meta">${state.pageOk ? escapeHtml(pageName) : 'Open a form, then come back'}</span>
