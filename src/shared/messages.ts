@@ -191,6 +191,8 @@ export type BackgroundMessage =
   | { type: 'fillie:apps-save'; app: Application }
   | { type: 'fillie:apps-delete'; id: string }
   | { type: 'fillie:apps-summary' }
+  | { type: 'fillie:answer-save'; context: ApplicationContext; resumeId?: string; question: string; answer: string; saved: boolean }
+  | { type: 'fillie:answers-get'; context: ApplicationContext; resumeId?: string }
   | { type: 'fillie:apps-track'; context: ApplicationContext; resumeId?: string; /** The page's readable text and the form's questions, for reading details such as the pay. */ formText?: string }
   | { type: 'fillie:get-memory' }
   | { type: 'fillie:save-memory'; memory: LearnedAnswer[] }

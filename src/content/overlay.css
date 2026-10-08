@@ -1569,3 +1569,40 @@ textarea {
   font-size: 12.5px;
   line-height: 1.45;
 }
+
+/* The heart: keep an answer for the interview */
+.heart-wrap { position: relative; display: inline-flex; }
+.heart-btn {
+  display: inline-grid; place-items: center; width: 28px; height: 28px; padding: 0; border-radius: 50%;
+  border: 1.5px solid rgba(246, 73, 50, 0.45); background: var(--ff-surface, #fff); color: #f64932; cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.heart-btn svg { fill: transparent; transition: fill 160ms ease; }
+.heart-btn:hover { background: #fde8e4; border-color: #f64932; transform: scale(1.08); }
+.heart-btn:focus-visible { outline: 2px solid #f64932; outline-offset: 2px; }
+.heart-btn[data-saved='true'] { background: #fde8e4; border-color: #f64932; }
+.heart-btn[data-saved='true'] svg { fill: #f64932; animation: heart-pop 460ms cubic-bezier(0.34, 1.56, 0.64, 1); }
+.heart-btn[data-saved='true']::after {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%; border: 2px solid #f64932; opacity: 0; pointer-events: none; animation: heart-ring 620ms ease-out;
+}
+.heart-nudge { animation: heart-ring-pulse 1.6s ease-out infinite; }
+@keyframes heart-pop { 0% { transform: scale(0.4); } 55% { transform: scale(1.35); } 100% { transform: scale(1); } }
+@keyframes heart-ring { 0% { transform: scale(0.8); opacity: 0.8; } 100% { transform: scale(1.9); opacity: 0; } }
+@keyframes heart-ring-pulse { 0% { box-shadow: 0 0 0 0 rgba(246, 73, 50, 0.5); } 70%, 100% { box-shadow: 0 0 0 9px rgba(246, 73, 50, 0); } }
+@keyframes heart-beat { 0%, 100% { transform: scale(1); box-shadow: 0 0 0 0 rgba(246, 73, 50, 0.45); } 40% { transform: scale(1.12); box-shadow: 0 0 0 7px rgba(246, 73, 50, 0); } }
+.heart-speck { position: absolute; left: 50%; top: 50%; width: 5px; height: 3px; border-radius: 1px; pointer-events: none; z-index: 3; }
+.review-item:hover .heart-btn { opacity: 1; }
+
+.heart-tip {
+  display: flex; align-items: center; gap: 10px; padding: 10px 12px; margin: 2px 0 6px;
+  background: #fff3d6; border: 1px solid rgba(138, 90, 0, 0.18); border-radius: 12px; color: #1c1500; animation: tip-in 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.heart-tip-art { display: grid; place-items: center; flex: none; width: 40px; height: 40px; border-radius: 50%; background: #fff; color: #f64932; animation: heart-beat 1.6s ease-in-out infinite; }
+.heart-tip-art svg { fill: #f64932; }
+.heart-tip-copy { display: flex; flex-direction: column; flex: 1; min-width: 0; font-size: 12px; line-height: 1.35; }
+.heart-tip-copy strong { font-size: 13px; }
+.heart-tip-close { flex: none; border: 0; border-radius: 8px; background: #191918; color: #fff; padding: 5px 10px; font: inherit; font-size: 12px; font-weight: 600; cursor: pointer; }
+@keyframes tip-in { from { opacity: 0; transform: translateY(6px) scale(0.97); } to { opacity: 1; transform: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .heart-btn, .heart-btn svg, .heart-btn::after, .heart-nudge, .heart-tip, .heart-tip-art { animation: none !important; transition: none !important; }
+}

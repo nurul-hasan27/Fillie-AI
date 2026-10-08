@@ -505,6 +505,8 @@ test.describe('popup polish', () => {
     const bg = await popup.locator('.pop-getpremium').evaluate((el) => getComputedStyle(el).backgroundColor);
     expect(bg).toBe('rgb(255, 177, 16)'); // marigold
     await expect(popup.locator('.pop-getpremium svg.pop-crown')).toBeVisible();
+    // Let the popup finish saving what it learned, so it cannot overwrite the copy planted below.
+    await expect.poll(() => popup.evaluate(async () => Boolean(((await chrome.storage.local.get('fillie:popup-cache'))['fillie:popup-cache'] as { summary?: unknown } | undefined)?.summary))).toBe(true);
     await popup.evaluate(async () => {
       const cache = (await chrome.storage.local.get('fillie:popup-cache'))['fillie:popup-cache'];
       cache.status.access = { allowed: true, plan: 'trial', remaining: 2, limit: 3, signedIn: true, email: 'a.very.long.email.address.indeed@example-company.com' };

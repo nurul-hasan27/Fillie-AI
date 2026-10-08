@@ -6,7 +6,7 @@ Do the parts in this order. Everything in Part 1 only *adds* to your database, s
 
 You need the Supabase CLI logged in (`supabase login`) and linked to the project (`supabase link --project-ref erhrkrcbcugckaczavsm`).
 
-### 1. Apply the database migrations (0005 to 0008)
+### 1. Apply the database migrations (0005 to 0009)
 
 Run from the `Fillie` folder, one at a time and in this order. Each is one transaction: if it fails, nothing from that file is kept.
 
@@ -15,7 +15,10 @@ supabase db query --linked -f supabase/migrations/0005_influencers.sql
 supabase db query --linked -f supabase/migrations/0006_influencer_api.sql
 supabase db query --linked -f supabase/migrations/0007_influencer_admin.sql
 supabase db query --linked -f supabase/migrations/0008_public_offers.sql
+supabase db query --linked -f supabase/migrations/0009_saved_answers.sql
 ```
+
+`0009` adds the column that holds hearted answers ("Interview prep"). The extension writes it on every application save, so **apply it before the extension update goes out**, or saving applications fails until it is there.
 
 (Use this instead of `supabase db push`: migrations 0001 to 0004 were applied by hand, so `db push` does not know about them and could try to run them again. You can also paste each file into the Supabase **SQL editor**.)
 
