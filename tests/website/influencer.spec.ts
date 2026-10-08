@@ -135,6 +135,8 @@ test('a customer arriving from the creator\'s link gets the code applied, adds a
   await shot(page, 'checkout-both');
 
   await modal.getByRole('button', { name: /Pay .*₹383\.89/ }).click();
+  // A quiet confetti burst marks the confirmed payment.
+  await page.waitForSelector('body > canvas', { timeout: 30_000 });
   await expect(page.getByText('Payment received', { exact: false }).first()).toBeVisible({ timeout: 30_000 });
   await expect(page.getByText(/unlimited access/i).first()).toBeVisible({ timeout: 30_000 });
 

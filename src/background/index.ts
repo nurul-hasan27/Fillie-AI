@@ -19,6 +19,7 @@ import { AccessService } from '../core/cloud/access';
 import { ApplicationStore } from '../core/cloud/applications';
 import { BackupService } from '../core/cloud/backup';
 import { CLOUD, isCloudConfigured } from '../core/cloud/config';
+import { readQuote } from '../core/cloud/money';
 import type { DeviceSignals, OAuthProvider } from '../core/cloud/types';
 import { extractDetails } from '../core/engine/intel';
 import { createAuthWindow, type WindowsApi } from './popup-window';
@@ -627,9 +628,36 @@ async function handleOAuth(provider: OAuthProvider) {
   }
 }
 
-async function handleCheckout(currency: 'INR' | 'USD') {
+/** Cleans the codes a page sends: at most three, upper-case, plain letters and numbers. */
+function cleanCodes(codes: unknown): string[] {
+  if (!Array.isArray(codes)) return [];
+  const out = new Set<string>();
+  for (const raw of codes) {
+    const code = typeof raw === 'string' ? raw.replace(/\s+/g, '').toUpperCase() : '';
+    if (/^[A-Z0-9]{4,16}$/.test(code)) out.add(code);
+    if (out.size === 3) break;
+  }
+  return [...out];
+}
+
+/** Prices both payment options with the buyer's codes. The server decides every amount. */
+async function handleCheckoutQuote(codes: string[]) {
   try {
-    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: JSON.stringify({ currency }) });
+    const ask = (currency: 'INR' | 'USD') =>
+      cloud.json<unknown>('/functions/v1/create-checkout', { method: 'POST', body: JSON.stringify({ currency, codes: cleanCodes(codes), quote: true }) });
+    const [inr, usd] = await Promise.all([ask('INR'), ask('USD')]);
+    const quotes = { INR: readQuote(inr), USD: readQuote(usd) };
+    // An older checkout function does not know about codes; then there is simply nothing to show.
+    if (!quotes.INR || !quotes.USD) return { ok: false as const, error: 'Codes are not available yet.', unsupported: true };
+    return { ok: true as const, quotes };
+  } catch (error) {
+    return authError(error);
+  }
+}
+
+async function handleCheckout(currency: 'INR' | 'USD', codes: string[] = []) {
+  try {
+    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: JSON.stringify({ currency, codes: cleanCodes(codes) }) });
     await (globalThis as { chrome?: typeof chrome }).chrome?.tabs?.create({ url });
     return { ok: true, url };
   } catch (error) {
@@ -826,7 +854,9 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
       await cloud.signOut();
       return { ok: true };
     case 'fillie:checkout':
-      return handleCheckout(message.currency);
+      return handleCheckout(message.currency, message.codes);
+    case 'fillie:checkout-quote':
+      return handleCheckoutQuote(message.codes);
     case 'fillie:feedback':
       return handleFeedback(message);
     case 'fillie:set-share-offers':

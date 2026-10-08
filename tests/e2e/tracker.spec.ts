@@ -377,15 +377,17 @@ test.describe('popup polish', () => {
     await expect(free.locator('.pop-getpremium')).toHaveText('Get premium');
     expect(await free.locator('.pop-premium').count()).toBe(0);
     expect(await free.locator('body').innerText()).not.toMatch(/unlocked/i);
-    await free.close();
-
-    await fillie.control.evaluate(async () => {
+    // Let the first popup finish saving what it learned, so it cannot overwrite the copy planted below.
+    await expect.poll(() => free.evaluate(async () => Boolean(((await chrome.storage.local.get('fillie:popup-cache'))['fillie:popup-cache'] as { summary?: unknown } | undefined)?.summary))).toBe(true);
+    await free.evaluate(async () => {
       const stored = await chrome.storage.local.get('fillie:popup-cache');
       const cache = stored['fillie:popup-cache'];
       cache.status.access = { allowed: true, plan: 'paid', remaining: 3, limit: 3, signedIn: true, email: 'asha@example.com' };
       cache.at = Date.now();
       await chrome.storage.local.set({ 'fillie:popup-cache': cache, 'fillie:popup-dirty': 0 });
     });
+    await free.close();
+
     const paid = await openPopup(fillie);
     await expect(paid.locator('.pop-premium')).toContainText('Premium');
     await expect(paid.locator('.pop-premium svg.pop-crown')).toBeVisible();
@@ -443,5 +445,25 @@ test.describe('popup polish', () => {
     expect(m.top).toBe(0);
     expect(m.overflowY).toBe('hidden');
     expect(m.body).toBe('hidden');
+  });
+
+  test('the popup follows the Notion style: warm paper, 12px cards, no shadows, a midnight total and sticky-note counters', async ({ fillie }) => {
+    const popup = await openPopup(fillie);
+    const style = await popup.evaluate(() => {
+      const css = (selector: string) => getComputedStyle(document.querySelector(selector) as HTMLElement);
+      return {
+        canvas: css('.popup').backgroundColor,
+        total: { radius: css('.pop-hero-top').borderTopLeftRadius, bg: css('.pop-hero-top').backgroundColor },
+        chip: css('.pop-chip-applied').borderTopLeftRadius,
+        shadows: ['.pop-hero-top', '.pop-chip-applied', '.pop-cta'].map((s) => css(s).boxShadow),
+        cta: css('.pop-cta').backgroundColor,
+      };
+    });
+    expect(style.canvas).toBe('rgb(246, 245, 244)'); // #f6f5f4, the paper canvas
+    expect(style.total).toEqual({ radius: '12px', bg: 'rgb(2, 9, 58)' }); // midnight sticky note
+    expect(style.chip).toBe('12px');
+    expect(style.shadows.every((s) => s === 'none')).toBe(true);
+    // Blue is the one filled button while there is a form to fill; with no form on the page it goes flat grey.
+    expect(['rgb(0, 117, 222)', 'rgb(239, 237, 235)']).toContain(style.cta);
   });
 });

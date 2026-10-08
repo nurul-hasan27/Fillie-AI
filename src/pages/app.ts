@@ -31,6 +31,8 @@ import { memoryEditor, memoryView } from './views/memory';
 import { resumeView } from './views/resume';
 import { applicationEditor, databaseView, type DatabaseState } from './views/database';
 import { accountView, type AccountState } from './views/account';
+import { celebrate } from '../ui/confetti';
+import { rejectionNote, type QuoteSet } from '../core/cloud/money';
 import { computeHashes } from '../core/cloud/fingerprint';
 import { newApplication } from '../core/cloud/applications';
 import type { Application, ApplicationStatus, OAuthProvider } from '../core/cloud/types';
@@ -104,7 +106,7 @@ const state: AppState = {
   resumes: { resumes: [], defaultId: '' },
   activeResumeId: '',
   db: { rows: [], hasMore: false, loading: false, loaded: false, localOnly: false, signedIn: false, search: '', status: 'all' },
-  account: { status: null, mode: 'signin', busy: '', feedbackRating: 0 },
+  account: { status: null, mode: 'signin', busy: '', feedbackRating: 0, codes: [], quotes: null, codeBusy: false, codeNote: '', codesSupported: true },
   memoryQuery: '',
   theme: (localStorage.getItem('fillie:theme') as AppState['theme']) ?? 'system',
   importWarnings: [],
@@ -1093,20 +1095,38 @@ app.addEventListener('click', async (event) => {
     case 'sign-out':
       await sendMessage({ type: 'fillie:sign-out' });
       state.account.status = null;
+      state.account.quotes = null;
       state.db = { ...state.db, rows: [], loaded: false, signedIn: false };
       await loadAccount();
       return;
     case 'checkout': {
       const currency = target.getAttribute('data-currency') === 'INR' ? 'INR' : 'USD';
-      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:checkout', currency });
-      if (!result.ok) toast(result.error ?? 'Could not start checkout.', 'danger');
+      const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:checkout', currency, codes: state.account.codes });
+      if (!result.ok) {
+        toast(result.error ?? 'Could not start checkout.', 'danger');
+        // A code may have stopped working since it was applied; show the prices again.
+        void refreshQuotes(state.account.codes);
+      }
       return;
     }
-    case 'refresh-payment':
-      state.account.status = await sendMessage<AccountStatus>({ type: 'fillie:refresh-payment', device: await computeHashes() });
-      render();
-      toast(state.account.status.access.plan === 'paid' ? 'Payment confirmed. Fillie is unlocked!' : 'No payment found yet. It can take a minute.');
+    case 'apply-code': {
+      const input = document.getElementById('promo-code') as HTMLInputElement | null;
+      const code = (input?.value ?? '').replace(/\s+/g, '').toUpperCase();
+      if (!code) return;
+      // The new code goes first, so it replaces an older code of the same kind.
+      await refreshQuotes([code, ...state.account.codes.filter((c) => c !== code)], code);
       return;
+    }
+    case 'remove-code':
+      await refreshQuotes(state.account.codes.filter((c) => c !== target.getAttribute('data-code')));
+      return;
+    case 'refresh-payment': {
+      const next = await sendMessage<AccountStatus>({ type: 'fillie:refresh-payment', device: await computeHashes() });
+      setAccountStatus(next);
+      render();
+      toast(next.access.plan === 'paid' ? 'Payment confirmed. Fillie is unlocked!' : 'No payment found yet. It can take a minute.');
+      return;
+    }
     case 'backup-now': {
       const result = await sendMessage<{ ok: boolean; reason?: string }>({ type: 'fillie:backup-now' });
       toast(result.ok ? 'Backed up' : (result.reason ?? 'Backup failed'), result.ok ? 'default' : 'danger');
@@ -1683,10 +1703,50 @@ function watchLoadMore(): void {
   dbObserver.observe(button);
 }
 
+/**
+ * Stores a fresh account status. When it shows the plan has just become paid, the page celebrates:
+ * a quiet confetti burst. It only fires on the change, never on a page that was already paid.
+ */
+function setAccountStatus(next: AccountStatus): void {
+  const before = state.account.status;
+  state.account.status = next;
+  if (before && before.access.plan !== 'paid' && next.access.plan === 'paid') {
+    state.account.quotes = null;
+    state.account.codes = [];
+    void celebrate();
+  }
+}
+
+/** Asks the server what each payment option costs with these codes, and keeps only the codes it accepted. */
+async function refreshQuotes(codes: string[], typed?: string): Promise<void> {
+  state.account.codeBusy = true;
+  render();
+  try {
+    const result = await sendMessage<{ ok: boolean; unsupported?: boolean; error?: string; quotes?: QuoteSet }>({ type: 'fillie:checkout-quote', codes });
+    if (result.ok && result.quotes) {
+      state.account.quotes = result.quotes;
+      state.account.codes = result.quotes.INR.applied.map((a) => a.code);
+      state.account.codeNote = rejectionNote(result.quotes.INR);
+      state.account.codesSupported = true;
+    } else if (result.unsupported) {
+      state.account.codesSupported = false;
+    } else {
+      state.account.codeNote = result.error ?? 'Could not check that code.';
+    }
+  } catch {
+    state.account.codeNote = 'Could not check that code.';
+  }
+  state.account.codeBusy = false;
+  if (typed && !state.account.codes.includes(typed) && !state.account.codeNote) state.account.codeNote = `${typed}: could not be applied.`;
+  render();
+}
+
 async function loadAccount(): Promise<void> {
   try {
-    state.account.status = await sendMessage<AccountStatus>({ type: 'fillie:account-status', device: await computeHashes() });
-    state.db.signedIn = state.account.status.access.signedIn;
+    setAccountStatus(await sendMessage<AccountStatus>({ type: 'fillie:account-status', device: await computeHashes() }));
+    state.db.signedIn = state.account.status!.access.signedIn;
+    const status = state.account.status!;
+    if (status.cloudConfigured && status.access.signedIn && status.access.plan !== 'paid' && !state.account.quotes) void refreshQuotes(state.account.codes);
   } catch {
     state.account.message = { tone: 'danger', text: 'Could not load your account.' };
   }
@@ -1798,7 +1858,7 @@ async function runAuth(busy: string, call: () => Promise<unknown>): Promise<void
 window.addEventListener('focus', () => {
   if (state.route.kind !== 'account' || !state.account.status || state.account.status.access.plan === 'paid') return;
   void (async () => {
-    state.account.status = await sendMessage<AccountStatus>({ type: 'fillie:refresh-payment', device: await computeHashes() });
+    setAccountStatus(await sendMessage<AccountStatus>({ type: 'fillie:refresh-payment', device: await computeHashes() }));
     render();
   })().catch(() => undefined);
 });

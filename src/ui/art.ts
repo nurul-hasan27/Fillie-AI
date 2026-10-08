@@ -45,3 +45,6 @@ export const sparkArt = `
   <path d="M92 70c1.6 11 6 15.4 17 17-11 1.6-15.4 6-17 17-1.6-11-6-15.4-17-17 11-1.6 15.4-6 17-17z" fill="url(#sb)"/>
   <ellipse cx="46" cy="38" rx="8" ry="4" fill="rgba(255,255,255,.4)" transform="rotate(-35 46 38)"/>
 </svg>`;
+
+/** Any of the illustrations above at another size (they ship at 112px). */
+export const sized = (art: string, size: number): string => art.replace(/width="\d+" height="\d+"/, `width="${size}" height="${size}"`);
