@@ -1,6 +1,7 @@
 import type { FieldPlan, InterviewQuestion, InterviewSpec, KnowledgeRef, SessionStats } from '../core/types';
 import { icon, type IconName } from '../ui/icons';
 import { truncate } from '../core/text';
+import { savedAnswerId } from '../core/cloud/saved-answers';
 import styles from './overlay.css';
 
 /**
@@ -66,6 +67,12 @@ export interface OverlayCallbacks {
   onPickResume?(id: string): void;
   /** Opens the account page to sign in and unlock. */
   onUpgrade?(): void;
+  /** The user hearted (or un-hearted) an answer to keep it with the application for the interview. */
+  onToggleSaved?(plan: FieldPlan, saved: boolean): void;
+  /** Whether this answer may be kept: false for passwords, files and other private fields. */
+  canSave?(plan: FieldPlan): boolean;
+  /** The first-time heart tip was dismissed or used. */
+  onHeartHintSeen?(): void;
 }
 
 const HIGHLIGHT_CSS = `
@@ -108,6 +115,9 @@ export class FillieOverlay {
   private planNote = '';
   /** True when no AI platform is set up, so the panel offers the free setup. */
   private aiMissing = false;
+  /** Ids of the questions already hearted on this application. */
+  private savedIds = new Set<string>();
+  private heartHint = false;
 
   setAiMissing(missing: boolean): void {
     this.aiMissing = missing;
@@ -133,6 +143,19 @@ export class FillieOverlay {
 
   setFilter(filter: OverlayFilter): void {
     this.activeFilter = filter;
+    this.reRenderCurrentView();
+  }
+
+  /** Which answers are already kept (from an earlier visit to this page). */
+  setSavedIds(ids: Iterable<string>): void {
+    this.savedIds = new Set(ids);
+    this.reRenderCurrentView();
+  }
+
+  /** Shows the one-time tip that explains the heart. */
+  setHeartHint(show: boolean): void {
+    if (this.heartHint === show) return;
+    this.heartHint = show;
     this.reRenderCurrentView();
   }
 
@@ -511,6 +534,9 @@ export class FillieOverlay {
       const pending = plans.filter((plan) => plan.status === 'needs-attention');
       const done = plans.filter((plan) => plan.status !== 'needs-attention');
 
+      // The first time, the heart is explained right at the top, where it cannot be missed.
+      if (done.length && this.heartHint && this.callbacks.onToggleSaved) out.push(this.renderHeartTip());
+
       if (pending.length) {
         const head = el('div', { class: 'inbox-head' });
         head.appendChild(text('span', { class: 'inbox-title' }, 'Needs your attention'));
@@ -683,6 +709,9 @@ export class FillieOverlay {
     const actions = el('div', { class: 'review-actions' });
 
     const answerStr = planAnswerToCopyText(plan);
+    if (answerStr && this.callbacks.onToggleSaved && (this.callbacks.canSave?.(plan) ?? true)) {
+      actions.appendChild(this.renderHeart(plan));
+    }
     if (answerStr) {
       const copyBtn = el('button', {
         class: 'icon-btn review-copy-btn',
@@ -715,6 +744,65 @@ export class FillieOverlay {
 
     item.appendChild(actions);
     return item;
+  }
+
+  /**
+   * The heart: keeps this exact question and answer with the application, to read again before the
+   * interview. A small burst of confetti marks the moment it is saved.
+   */
+  private renderHeart(plan: FieldPlan): HTMLElement {
+    const id = savedAnswerId(plan.field.label || 'Question');
+    const wrap = el('span', { class: 'heart-wrap' });
+    const button = el('button', {
+      class: 'heart-btn',
+      type: 'button',
+      'data-fillie-heart': plan.field.id,
+      'aria-pressed': String(this.savedIds.has(id)),
+      'aria-label': `Save the answer to "${plan.field.label || 'this question'}" for your interview`,
+      title: 'Save this answer for your interview',
+    });
+    button.dataset.saved = String(this.savedIds.has(id));
+    if (this.heartHint && this.savedIds.size === 0) button.classList.add('heart-nudge');
+    button.appendChild(icon('heart', { size: 15, strokeWidth: 1.7 }));
+    button.addEventListener('click', (event) => {
+      event.stopPropagation();
+      const next = !this.savedIds.has(id);
+      if (next) this.savedIds.add(id);
+      else this.savedIds.delete(id);
+      button.dataset.saved = String(next);
+      button.setAttribute('aria-pressed', String(next));
+      button.classList.remove('heart-nudge');
+      if (next) heartBurst(wrap);
+      if (this.heartHint) {
+        this.heartHint = false;
+        this.root?.querySelector('.heart-tip')?.remove();
+        this.callbacks.onHeartHintSeen?.();
+      }
+      this.callbacks.onToggleSaved?.(plan, next);
+    });
+    wrap.appendChild(button);
+    return wrap;
+  }
+
+  /** The one-time card that explains the heart, with a heart that beats. */
+  private renderHeartTip(): HTMLElement {
+    const tip = el('div', { class: 'heart-tip', role: 'note' });
+    const art = el('span', { class: 'heart-tip-art', 'aria-hidden': 'true' });
+    art.appendChild(icon('heart', { size: 22, strokeWidth: 1.6 }));
+    tip.appendChild(art);
+    const copy = el('span', { class: 'heart-tip-copy' });
+    copy.appendChild(text('strong', {}, 'Tap the heart to keep an answer'));
+    copy.appendChild(text('span', {}, 'Each filled answer below has one. It is saved with this application, to read before your interview.'));
+    tip.appendChild(copy);
+    const close = el('button', { class: 'heart-tip-close', type: 'button', 'aria-label': 'Got it' }, 'Got it');
+    close.addEventListener('click', () => {
+      this.heartHint = false;
+      tip.remove();
+      this.root?.querySelectorAll('.heart-nudge').forEach((node) => node.classList.remove('heart-nudge'));
+      this.callbacks.onHeartHintSeen?.();
+    });
+    tip.appendChild(close);
+    return tip;
   }
 
   private renderResolve(view: Extract<OverlayView, { kind: 'resolve' }>): HTMLElement {
@@ -1206,6 +1294,7 @@ export class FillieOverlay {
       filtered = view.plans.filter((plan) => plan.status !== 'skipped');
     }
 
+    if (this.heartHint && this.callbacks.onToggleSaved && filtered.length) wrap.appendChild(this.renderHeartTip());
     const list = el('ul', { class: 'review-list' });
     for (const plan of filtered) {
       list.appendChild(this.renderReviewRow(plan));
@@ -1232,6 +1321,17 @@ export class FillieOverlay {
     );
     wrap.appendChild(success);
     wrap.appendChild(this.renderStats(view.stats, view.plans));
+
+    if (this.activeFilter === 'all') {
+      const done = view.plans.filter((plan) => plan.status !== 'skipped' && plan.status !== 'needs-attention');
+      if (done.length && this.callbacks.onToggleSaved) {
+        if (this.heartHint) wrap.appendChild(this.renderHeartTip());
+        wrap.appendChild(text('span', { class: 'section-label' }, `Filled by Fillie · ${done.length}`));
+        const list = el('ul', { class: 'review-list' });
+        for (const plan of done.slice(0, 40)) list.appendChild(this.renderReviewRow(plan));
+        wrap.appendChild(list);
+      }
+    }
 
     if (this.activeFilter !== 'all') {
       let filtered = view.plans;
@@ -1602,5 +1702,33 @@ export function copyPillToClipboard(button: HTMLElement, textToCopy: string): vo
     }, 1500);
   } catch {
     // Ignore clipboard error
+  }
+}
+
+/**
+ * A small, quiet confetti burst around the heart that was just saved: a dozen specks fly out and fade.
+ * Skipped for people who prefer reduced motion.
+ */
+export function heartBurst(anchor: HTMLElement): void {
+  if (typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  if (typeof anchor.animate !== 'function') return;
+  const colors = ['#f64932', '#ffb110', '#0075de', '#62aef0', '#17795e', '#ff7a66'];
+  const count = 12;
+  for (let i = 0; i < count; i += 1) {
+    const speck = el('span', { class: 'heart-speck', 'aria-hidden': 'true' });
+    const angle = (i / count) * Math.PI * 2 + (i % 2 ? 0.2 : -0.2);
+    const distance = 20 + (i % 3) * 7;
+    speck.style.background = colors[i % colors.length]!;
+    if (i % 3 === 0) speck.style.borderRadius = '50%';
+    anchor.appendChild(speck);
+    const move = speck.animate(
+      [
+        { transform: 'translate(-50%, -50%) scale(0.4)', opacity: 1 },
+        { transform: `translate(calc(-50% + ${Math.cos(angle) * distance}px), calc(-50% + ${Math.sin(angle) * distance - 4}px)) scale(1) rotate(${i * 40}deg)`, opacity: 1, offset: 0.55 },
+        { transform: `translate(calc(-50% + ${Math.cos(angle) * distance * 1.25}px), calc(-50% + ${Math.sin(angle) * distance * 1.25 + 10}px)) scale(0.6) rotate(${i * 70}deg)`, opacity: 0 },
+      ],
+      { duration: 720, easing: 'cubic-bezier(0.22, 1, 0.36, 1)', fill: 'forwards' },
+    );
+    move.onfinish = () => speck.remove();
   }
 }

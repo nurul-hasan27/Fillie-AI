@@ -18,6 +18,8 @@ export type ApplicationStatus = 'applied' | 'interview' | 'offer' | 'rejected';
 
 export const APPLICATION_STATUSES: ApplicationStatus[] = ['applied', 'interview', 'offer', 'rejected'];
 
+import type { SavedAnswer } from './saved-answers';
+
 export interface Application {
   id: string;
   company: string;
@@ -40,6 +42,8 @@ export interface Application {
   resumeName: string;
   /** Pay stated in the posting, copied as written (e.g. "8-12 LPA"). Empty when the posting does not say. */
   offeredCtc: string;
+  /** Questions and answers the user hearted on the form, for reading again before the interview. */
+  savedAnswers?: SavedAnswer[];
   updatedAt: number;
 }
 

@@ -440,6 +440,16 @@ describe('explore offers', () => {
   });
 });
 
+describe('saved answers on applications', () => {
+  it('keeps hearted answers with the application, defaults to none, and refuses anything that is not a list', async () => {
+    await db.query(`insert into public.applications (id, user_id, company, role, status, applied_at, updated_at) values ('a1', $1, 'Razorpay', 'SDE', 'applied', current_date, 1)`, [ids.cust1]);
+    expect((await db.query<{ saved_answers: unknown }>(`select saved_answers from public.applications where id = 'a1'`)).rows[0]!.saved_answers).toEqual([]);
+    await db.query(`update public.applications set saved_answers = $1::jsonb where id = 'a1'`, [JSON.stringify([{ id: 'q1', question: 'Why us?', answer: 'Because…', savedAt: 1 }])]);
+    expect((await db.query<{ saved_answers: Array<{ question: string }> }>(`select saved_answers from public.applications where id = 'a1'`)).rows[0]!.saved_answers[0]!.question).toBe('Why us?');
+    await expect(db.query(`update public.applications set saved_answers = '{"a":1}'::jsonb where id = 'a1'`)).rejects.toThrow(/saved_answers_valid/);
+  });
+});
+
 describe('permissions', () => {
   it('keeps every admin function closed to ordinary signed-in users', async () => {
     await asUser(ids.asha!);

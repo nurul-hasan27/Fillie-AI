@@ -20,6 +20,7 @@ import type { AccessState } from '../core/cloud/types';
 import { fillField, focusField, highlightField, readFieldValue, verifyFields } from './filler';
 import { FillieOverlay, type DraftState } from './overlay';
 import { VERSION } from '../shared/version';
+import { markSeen, readTour, shouldShow } from '../core/tour';
 
 const MAX_RESCANS = 4;
 const FILL_DELAY_MS = 55;
@@ -113,6 +114,12 @@ const overlay = new FillieOverlay({
   onOpenEdit: (plan) => renderEditView(plan),
   onEdit: (plan, value, saveToFillie) => void handleEditField(plan, value, saveToFillie),
   onSaveAnswers: () => void learnFromPage(),
+  onToggleSaved: (plan, saved) => void toggleSavedAnswer(plan, saved),
+  canSave: (plan) => {
+    const field = state.fields.get(plan.field.id);
+    return Boolean(field) && !field!.sensitive && !field!.manualOnly && !field!.acknowledgement && field!.kind !== 'file';
+  },
+  onHeartHintSeen: () => void markSeen('heart'),
   onPickResume: (id) => resolveResumePick(id),
   onUpgrade: () => void sendMessage({ type: 'fillie:open-account' }).catch(() => undefined),
 });
@@ -285,6 +292,8 @@ async function run(): Promise<void> {
 
     overlay.setAiSource(describeServed(response.servedBy, response.switchedFrom));
     overlay.setAiMissing(response.aiReady === false);
+    void refreshSavedAnswers();
+    void maybeShowHeartHint();
     state.aiCalls = response.aiCalls ?? 0;
     state.memoryHits = response.memoryHits ?? 0;
 
@@ -732,6 +741,40 @@ async function reportQuality(): Promise<void> {
   } catch {
     /* analytics are best effort */
   }
+}
+
+/** The text of an answer as it is on the page right now, so edits the user made are what gets kept. */
+function currentAnswer(plan: FieldPlan): string {
+  const field = state.fields.get(plan.field.id);
+  const live = field ? readFieldValue(field).trim() : '';
+  return (live || String(plan.answer ?? '')).slice(0, 3000);
+}
+
+/** Keeps (or lets go of) one question and answer with this application. */
+async function toggleSavedAnswer(plan: FieldPlan, saved: boolean): Promise<void> {
+  try {
+    const result = await sendMessage<{ ok?: boolean }>({
+      type: 'fillie:answer-save', context: state.context, resumeId: state.resumeId, question: plan.field.label || 'Question', answer: currentAnswer(plan), saved,
+    });
+    if (!result?.ok) await refreshSavedAnswers(); // it did not stick: show what is really saved
+  } catch {
+    await refreshSavedAnswers();
+  }
+}
+
+/** Hearts that were saved on an earlier visit to this page. */
+async function refreshSavedAnswers(): Promise<void> {
+  try {
+    const result = await sendMessage<{ ids?: string[] }>({ type: 'fillie:answers-get', context: state.context, resumeId: state.resumeId });
+    overlay.setSavedIds(result?.ids ?? []);
+  } catch {
+    /* hearts simply start empty */
+  }
+}
+
+/** The very first time, explain the heart. */
+async function maybeShowHeartHint(): Promise<void> {
+  overlay.setHeartHint(shouldShow(await readTour(), 'heart'));
 }
 
 let tracked = false;

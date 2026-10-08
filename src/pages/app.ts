@@ -29,9 +29,12 @@ import {
 } from './views/profile';
 import { memoryEditor, memoryView } from './views/memory';
 import { resumeView } from './views/resume';
-import { applicationEditor, databaseView, type DatabaseState } from './views/database';
+import { applicationEditor, databaseView, prepModal, type DatabaseState } from './views/database';
 import { accountView, type AccountState } from './views/account';
 import { celebrate } from '../ui/confetti';
+import { startTour, type TourHandle } from '../ui/tour';
+import { markManySeen, markSeen, markWelcomeDone, readTour, resetTour, shouldShow, tourAllowed } from '../core/tour';
+import { SECTION_TIPS, tipKeyFor, welcomeSteps } from './tour-steps';
 import { rejectionNote, type PublicOffer, type QuoteSet } from '../core/cloud/money';
 import { computeHashes } from '../core/cloud/fingerprint';
 import { newApplication } from '../core/cloud/applications';
@@ -73,6 +76,8 @@ interface AppState {
   activeResumeId: string;
   db: DatabaseState;
   editingApp?: { app: Application; isNew: boolean };
+  /** The "Interview prep" window: which application, and which question is open. */
+  prep?: { appId: string; open: string | null };
   account: AccountState;
   memoryQuery: string;
   theme: 'light' | 'dark' | 'system';
@@ -264,6 +269,7 @@ function sidebar(): TemplateResult {
         </div>
         <div class="completeness"><i style="width:${completion}%"></i></div>
         <span class="ff-meta">v${VERSION}</span>
+        <button class="ff-btn ff-btn-ghost ff-btn-sm" type="button" data-action="start-tour">Take the tour</button>
       </div>
     </aside>
   `;
@@ -332,7 +338,8 @@ function body(): TemplateResult {
   }
 
   if (state.route.kind === 'database') {
-    return html`${databaseView(state.db)}${state.editingApp ? applicationEditor(state.editingApp.app, state.editingApp.isNew) : ''}`;
+    const prepApp = state.prep ? state.db.rows.find((row) => row.id === state.prep!.appId) : undefined;
+    return html`${databaseView(state.db)}${state.editingApp ? applicationEditor(state.editingApp.app, state.editingApp.isNew) : ''}${prepApp ? prepModal(prepApp, state.prep!.open) : ''}`;
   }
   if (state.route.kind === 'account') return accountView(state.account);
   if (state.route.kind === 'resume') return resumeView(state.resumes, state.activeResumeId);
@@ -1013,6 +1020,48 @@ app.addEventListener('click', async (event) => {
       render();
       app.querySelector<HTMLInputElement>('#af-company')?.focus();
       return;
+    case 'start-tour':
+      await resetTour();
+      beginWelcomeTour();
+      return;
+    case 'open-prep':
+      state.prep = { appId: target.getAttribute('data-id') ?? '', open: null };
+      render();
+      return;
+    case 'close-prep':
+      // A click inside the window itself must not close it; only the backdrop and the × do.
+      if (target.classList.contains('modal-backdrop') && rawTarget.closest('.prep-modal')) return;
+      state.prep = undefined;
+      render();
+      return;
+    case 'toggle-prep': {
+      if (!state.prep) return;
+      const id = target.getAttribute('data-qid');
+      state.prep = { ...state.prep, open: state.prep.open === id ? null : id };
+      render();
+      return;
+    }
+    case 'copy-prep': {
+      const app = state.db.rows.find((row) => row.id === state.prep?.appId);
+      const item = app?.savedAnswers?.find((a) => a.id === target.getAttribute('data-qid'));
+      if (!item) return;
+      try {
+        await navigator.clipboard.writeText(item.answer);
+        toast('Answer copied');
+      } catch {
+        toast('Could not copy', 'danger');
+      }
+      return;
+    }
+    case 'remove-prep': {
+      const app = state.db.rows.find((row) => row.id === state.prep?.appId);
+      if (!app) return;
+      const next = { ...app, savedAnswers: (app.savedAnswers ?? []).filter((a) => a.id !== target.getAttribute('data-qid')) };
+      state.db.rows = state.db.rows.map((row) => (row.id === app.id ? next : row));
+      render();
+      await sendMessage({ type: 'fillie:apps-save', app: next }).catch(() => undefined);
+      return;
+    }
     case 'edit-app': {
       const found = state.db.rows.find((row) => row.id === target.getAttribute('data-id'));
       if (found) {
@@ -1911,7 +1960,61 @@ window.addEventListener('hashchange', () => {
   render();
   applyRouteData();
   window.scrollTo({ top: 0 });
+  void maybeShowTip();
 });
+
+/* ------------------------------------------------------------------ */
+/* Guided tour                                                         */
+/* ------------------------------------------------------------------ */
+
+let activeTour: TourHandle | undefined;
+const TIP_KEYS = Object.keys(SECTION_TIPS);
+
+/** The welcome tour: the whole extension in about a minute, with the page changing as it goes. */
+function beginWelcomeTour(): void {
+  activeTour?.stop();
+  activeTour = startTour({
+    steps: welcomeSteps(),
+    celebrate: true,
+    onRoute: (route) => {
+      if (location.hash !== route) location.hash = route;
+    },
+    onEnd: () => {
+      activeTour = undefined;
+      // The tour covered every section, so their one-time tips are not needed straight after.
+      void markWelcomeDone().then(() => markManySeen(TIP_KEYS));
+    },
+  });
+}
+
+/** A small tip the first time a section is opened. */
+async function maybeShowTip(): Promise<void> {
+  if (activeTour) return;
+  const key = tipKeyFor(state.route as { kind: string; section?: string });
+  if (!key) return;
+  const tour = await readTour();
+  if (!tour.welcome || !shouldShow(tour, key)) return;
+  activeTour = startTour({
+    steps: [SECTION_TIPS[key]!],
+    tip: true,
+    onEnd: () => {
+      activeTour = undefined;
+      void markSeen(key);
+    },
+  });
+}
+
+async function initTour(): Promise<void> {
+  const tour = await readTour();
+  if (new URLSearchParams(location.search).get('tour') === '1') {
+    await resetTour();
+    beginWelcomeTour();
+    return;
+  }
+  if (!tourAllowed(tour)) return;
+  if (!tour.welcome) beginWelcomeTour();
+  else void maybeShowTip();
+}
 
 async function boot(): Promise<void> {
   setTheme(state.theme);
@@ -1925,6 +2028,7 @@ async function boot(): Promise<void> {
   await Promise.all([refreshSettings(), refreshMemory(), refreshDiagnostics(), refreshResumes()]);
   render();
   applyRouteData();
+  void initTour();
 }
 
 void boot();

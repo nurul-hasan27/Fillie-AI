@@ -20,6 +20,7 @@ import { ApplicationStore } from '../core/cloud/applications';
 import { BackupService } from '../core/cloud/backup';
 import { CLOUD, isCloudConfigured } from '../core/cloud/config';
 import { readOffers, readQuote } from '../core/cloud/money';
+import { savedAnswerId } from '../core/cloud/saved-answers';
 import { checkReminders, NOTIFICATION_PREFIX, REMINDER_ALARM, REMINDERS_KEY, REMINDERS_SENT_KEY, type SentMap } from './reminders';
 import type { DeviceSignals, OAuthProvider } from '../core/cloud/types';
 import { extractDetails } from '../core/engine/intel';
@@ -698,7 +699,20 @@ async function handleRestoreNow() {
  * AI platform is configured, a short AI summary; a rating is only an AI guess
  * and stays editable.
  */
+/** Tracking in progress, by page, so a heart clicked meanwhile waits for the application to exist. */
+const trackInFlight = new Map<string, Promise<unknown>>();
+
 async function handleTrack(context: ApplicationContext, resumeId?: string, formText = '') {
+  const run = trackNow(context, resumeId, formText);
+  trackInFlight.set(context.url, run);
+  try {
+    return await run;
+  } finally {
+    if (trackInFlight.get(context.url) === run) trackInFlight.delete(context.url);
+  }
+}
+
+async function trackNow(context: ApplicationContext, resumeId?: string, formText = '') {
   const resumeName = await storage.getResumeName(resumeId);
   const settings = await getSettings();
   const deps = await plannerDeps(settings);
@@ -723,6 +737,40 @@ async function handleTrack(context: ApplicationContext, resumeId?: string, formT
     },
   );
   return { ok: true, created, app };
+}
+
+/** The page's application, as far as Fillie can tell without reading the whole form again. */
+async function pageDraft(context: ApplicationContext, resumeId?: string) {
+  const resumeName = await storage.getResumeName(resumeId);
+  return { company: context.company?.trim() || context.host, role: context.role?.trim() || '', url: context.url, host: context.host, resumeName };
+}
+
+/** Heart clicks are handled one at a time, so two quick clicks cannot overwrite each other. */
+let answerChain: Promise<unknown> = Promise.resolve();
+
+function handleAnswerSave(message: Extract<BackgroundMessage, { type: 'fillie:answer-save' }>) {
+  const job = answerChain.then(async () => {
+    try {
+      const draft = await pageDraft(message.context, message.resumeId);
+      await trackInFlight.get(message.context.url)?.catch(() => undefined);
+      const app = (await applications.find(draft)) ?? (await applications.track(draft)).app;
+      const updated = await applications.setSavedAnswer(app.id, message.question, message.answer, message.saved);
+      return { ok: Boolean(updated), count: updated?.savedAnswers?.length ?? 0, id: savedAnswerId(message.question) };
+    } catch (error) {
+      return authError(error);
+    }
+  });
+  answerChain = job.catch(() => undefined);
+  return job;
+}
+
+async function handleAnswersGet(message: Extract<BackgroundMessage, { type: 'fillie:answers-get' }>) {
+  try {
+    const answers = await applications.savedAnswersFor(await pageDraft(message.context, message.resumeId));
+    return { ok: true as const, ids: answers.map((a) => a.id) };
+  } catch {
+    return { ok: true as const, ids: [] as string[] };
+  }
 }
 
 async function readShareOffers(): Promise<boolean> {
@@ -910,6 +958,10 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
     case 'fillie:apps-delete':
       await applications.remove(message.id);
       return { ok: true };
+    case 'fillie:answer-save':
+      return handleAnswerSave(message);
+    case 'fillie:answers-get':
+      return handleAnswersGet(message);
     case 'fillie:apps-track':
       return handleTrack(message.context, message.resumeId, message.formText);
     case 'fillie:get-memory':

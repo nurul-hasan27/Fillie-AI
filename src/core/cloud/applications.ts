@@ -4,6 +4,7 @@ import { CloudClient } from './client';
 import { CLOUD } from './config';
 import type { Application, ApplicationStatus } from './types';
 import { APPLICATION_STATUSES } from './types';
+import { normalizeSavedAnswers, withSavedAnswer, withoutSavedAnswer, type SavedAnswer } from './saved-answers';
 
 const LOCAL_KEY = 'fillie:applications';
 
@@ -27,6 +28,7 @@ interface Row {
   host: string;
   resume_name: string;
   offered_ctc: string;
+  saved_answers?: SavedAnswer[];
   updated_at: number;
 }
 
@@ -78,6 +80,7 @@ export function newApplication(input: Partial<Application> & { company: string; 
     host: input.host ?? '',
     resumeName: (input.resumeName ?? '').trim().slice(0, 80),
     offeredCtc: (input.offeredCtc ?? '').trim().slice(0, 80),
+    savedAnswers: normalizeSavedAnswers(input.savedAnswers),
     updatedAt: now,
   };
 }
@@ -98,6 +101,7 @@ export function normalizeApplication(app: Application): Application {
     ratingSource: clampRating(app.rating) ? app.ratingSource : null,
     notes: app.notes.map((n) => n.trim()).filter(Boolean).slice(0, 8),
     offeredCtc: (app.offeredCtc ?? '').trim().slice(0, 80),
+    savedAnswers: normalizeSavedAnswers(app.savedAnswers),
     updatedAt: Date.now(),
   };
 }
@@ -118,6 +122,7 @@ const toRow = (app: Application, userId: string): Row & { user_id: string } => (
   host: app.host,
   resume_name: app.resumeName,
   offered_ctc: app.offeredCtc,
+  saved_answers: app.savedAnswers ?? [],
   updated_at: app.updatedAt,
 });
 
@@ -136,6 +141,7 @@ const fromRow = (row: Row): Application => ({
   host: row.host ?? '',
   resumeName: row.resume_name ?? '',
   offeredCtc: row.offered_ctc ?? '',
+  savedAnswers: normalizeSavedAnswers(row.saved_answers),
   updatedAt: Number(row.updated_at),
 });
 
@@ -182,6 +188,36 @@ export class ApplicationStore {
     const app = newApplication(merged);
     await this.save(app);
     return { app, created: true };
+  }
+
+  /** The application for this page (by address, then by company and role), without creating one. */
+  async find(draft: { url?: string; company: string; role: string; resumeName?: string }): Promise<Application | undefined> {
+    return (await this.findByUrl(draft.url)) ?? (await this.findByKey(applicationKey(draft.company, draft.role, draft.resumeName)));
+  }
+
+  private async getById(id: string): Promise<Application | undefined> {
+    const local = (await this.readLocal()).find((row) => row.id === id);
+    if (local) return local;
+    if (!(await this.client.getSession())) return undefined;
+    try {
+      const rows = await this.client.json<Row[]>(`/rest/v1/applications?select=*&id=eq.${encodeURIComponent(id)}&limit=1`);
+      return rows[0] ? fromRow(rows[0]) : undefined;
+    } catch {
+      return undefined;
+    }
+  }
+
+  /** Hearts an answer (or un-hearts it) on an application, and saves the result. */
+  async setSavedAnswer(id: string, question: string, answer: string, saved: boolean): Promise<Application | undefined> {
+    const app = await this.getById(id);
+    if (!app) return undefined;
+    const current = normalizeSavedAnswers(app.savedAnswers);
+    return this.save({ ...app, savedAnswers: saved ? withSavedAnswer(current, question, answer) : withoutSavedAnswer(current, question) });
+  }
+
+  /** The saved answers for a page, or none. */
+  async savedAnswersFor(draft: { url?: string; company: string; role: string; resumeName?: string }): Promise<SavedAnswer[]> {
+    return normalizeSavedAnswers((await this.find(draft))?.savedAnswers);
   }
 
   private async findByUrl(url: string | undefined): Promise<Application | undefined> {

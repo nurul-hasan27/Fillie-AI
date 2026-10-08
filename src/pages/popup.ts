@@ -3,10 +3,13 @@ import { computeHashes } from '../core/cloud/fingerprint';
 import { sendMessage, type ContentPingResponse } from '../shared/messages';
 import { escapeHtml, html, preferredTheme, setTheme, type TemplateResult } from '../ui/dom';
 import { icon } from '../ui/icons';
-import { resumeArt, sized, sparkArt } from '../ui/art';
+import { resumeArt } from '../ui/art';
 import { VERSION } from '../shared/version';
 import type { TrackerSummary } from '../core/cloud/applications';
 import { PROVIDER_PRESETS } from '../core/ai/presets';
+import { markSeen, readTour, shouldShow } from '../core/tour';
+import { sized, sparkArt } from '../ui/art';
+import { startTour } from '../ui/tour';
 
 /**
  * Popup = quick status + one primary action. Anything that needs room (profile,
@@ -363,6 +366,17 @@ async function chosenTheme(): Promise<'light' | 'dark'> {
   return preferredTheme();
 }
 
+/** The first time the popup opens with a profile, point at the one button that matters. */
+async function maybeShowPopupTip(): Promise<void> {
+  const tour = await readTour();
+  if (!shouldShow(tour, 'popup') || !document.querySelector('.pop-cta')) return;
+  startTour({
+    tip: true,
+    steps: [{ id: 'tip-popup', art: sized(sparkArt, 78), title: 'This is the button', text: 'Open a job form, then press it. Or press Alt + Shift + F on the page.', keys: ['Alt', 'Shift', 'F'], target: '.pop-cta', button: 'Got it' }],
+    onEnd: () => void markSeen('popup'),
+  });
+}
+
 async function init(): Promise<void> {
   setTheme(await chosenTheme());
   const [cached, tab] = await Promise.all([readCache(), activeTab()]);
@@ -407,6 +421,6 @@ app.addEventListener('click', async (event) => {
   }
 });
 
-void init();
+void init().then(() => maybeShowPopupTip()).catch(() => undefined);
 
 export { VERSION, paint };

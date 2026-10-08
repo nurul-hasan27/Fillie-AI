@@ -48,3 +48,46 @@ export const sparkArt = `
 
 /** Any of the illustrations above at another size (they ship at 112px). */
 export const sized = (art: string, size: number): string => art.replace(/width="\d+" height="\d+"/, `width="${size}" height="${size}"`);
+
+/** A coral heart: answers kept for the interview. */
+export const heartArt = `
+<svg class="art" viewBox="0 0 120 120" width="112" height="112" aria-hidden="true" focusable="false">
+  <defs>${defs('ha', '#ff8fa0', '#f0405e')}</defs>
+  <ellipse cx="60" cy="108" rx="32" ry="5" fill="rgba(0,0,0,.08)"/>
+  <path d="M60 98C20 72 14 46 29 31c12-12 27-6 31 5 4-11 19-17 31-5 15 15 9 41-31 67z" fill="url(#ha)"/>
+  <ellipse cx="42" cy="40" rx="9" ry="5" fill="rgba(255,255,255,.45)" transform="rotate(-35 42 40)"/>
+</svg>`;
+
+/** A golden bell with a red dot: the interview reminder. */
+export const bellArt = `
+<svg class="art" viewBox="0 0 120 120" width="112" height="112" aria-hidden="true" focusable="false">
+  <defs>${defs('ba', '#ffd36b', '#ffa400')}</defs>
+  <ellipse cx="60" cy="108" rx="32" ry="5" fill="rgba(0,0,0,.08)"/>
+  <path d="M60 18c-18 0-30 14-30 31v17l-9 15h78l-9-15V49c0-17-12-31-30-31z" fill="url(#ba)"/>
+  <rect x="48" y="84" width="24" height="12" rx="6" fill="#f64932"/>
+  <circle cx="86" cy="28" r="10" fill="#f64932"/>
+  <ellipse cx="44" cy="40" rx="8" ry="4.5" fill="rgba(255,255,255,.45)" transform="rotate(-35 44 40)"/>
+</svg>`;
+
+/** A sky-blue folder: where the applications live. */
+export const folderArt = `
+<svg class="art" viewBox="0 0 120 120" width="112" height="112" aria-hidden="true" focusable="false">
+  <defs>${defs('fa', '#8cc4f6', '#2f86df')}</defs>
+  <ellipse cx="60" cy="108" rx="36" ry="5" fill="rgba(0,0,0,.08)"/>
+  <path d="M16 34a9 9 0 019-9h24l9 10h37a9 9 0 019 9v47a9 9 0 01-9 9H25a9 9 0 01-9-9z" fill="url(#fa)"/>
+  <rect x="16" y="48" width="88" height="46" rx="9" fill="#62aef0"/>
+  <ellipse cx="36" cy="58" rx="9" ry="4.5" fill="rgba(255,255,255,.4)" transform="rotate(-20 36 58)"/>
+</svg>`;
+
+/** A friendly hand: you press submit. */
+export const handArt = `
+<svg class="art" viewBox="0 0 120 120" width="112" height="112" aria-hidden="true" focusable="false">
+  <defs>${defs('ma', '#ffd8a8', '#ffb26b')}</defs>
+  <ellipse cx="60" cy="108" rx="30" ry="5" fill="rgba(0,0,0,.08)"/>
+  <rect x="38" y="20" width="12" height="46" rx="6" fill="url(#ma)"/>
+  <rect x="52" y="12" width="12" height="52" rx="6" fill="url(#ma)"/>
+  <rect x="66" y="18" width="12" height="48" rx="6" fill="url(#ma)"/>
+  <rect x="80" y="30" width="11" height="40" rx="5.5" fill="url(#ma)"/>
+  <path d="M30 62c-6-4-12 0-8 7l14 24c6 10 16 14 28 14 18 0 28-12 28-28V60H30z" fill="url(#ma)"/>
+  <ellipse cx="46" cy="30" rx="3.5" ry="9" fill="rgba(255,255,255,.4)"/>
+</svg>`;
