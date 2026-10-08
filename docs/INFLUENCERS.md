@@ -12,6 +12,8 @@ Creators join at **/influencer**, get a promo code, and earn commission on every
 | Withdrawal | The creator withdraws their whole available balance (minimum ₹500 / $10). They see the exact amount that reaches their bank *before* confirming. |
 | Payout | You review the request in **Influencers → Withdrawal management**: **Approve**, send the money from your bank app, then **Mark as paid** with the transfer reference (UTR). Or **Reject** with a reason, and the money returns to the creator's balance. |
 
+Offers have a **Show in "Explore offers"** switch: on, customers can browse and apply them from the payment window and the extension; off, the code only works when typed in. Creator codes are never listed.
+
 Customers can enter codes in two places: the payment window on the website, and **Account** in the extension. Both show every applied code with how much it takes off (in ₹ and $), the price before and after, and the amount to pay, all worked out by the server. A confetti burst plays when a payment is confirmed.
 
 Everything above is a setting, not code: **Influencers → Programme settings** (discount %, commission %, refund window, minimum withdrawal, TDS, transfer fee, codes per creator).
@@ -47,7 +49,7 @@ A creator can delete their influencer account in Settings. If they have money av
 
 ## Setting it up
 
-1. Run `supabase/migrations/0005_influencers.sql`, `0006_influencer_api.sql`, `0007_influencer_admin.sql` in the Supabase SQL editor (or `supabase db push`). They only add things.
+1. Run `supabase/migrations/0005_influencers.sql`, `0006_influencer_api.sql`, `0007_influencer_admin.sql` and `0008_public_offers.sql` (the last one adds the "Explore offers" list) in the Supabase SQL editor (or `supabase db push`). They only add things.
 2. Deploy the changed functions **before** the website, because the checkout page now asks the function to price codes:
    ```bash
    supabase functions deploy create-checkout

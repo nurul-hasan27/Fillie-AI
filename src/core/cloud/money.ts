@@ -58,3 +58,40 @@ export function rejectionNote(quote: CheckoutQuote): string {
   const bad = quote.rejected.find((r) => r.reason !== 'same_kind');
   return bad ? `${bad.code}: ${REJECT_TEXT[bad.reason] ?? 'Could not apply that code.'}` : '';
 }
+
+/** An offer an admin has chosen to show customers in "Explore offers". Creator codes are never listed. */
+export interface PublicOffer {
+  code: string;
+  title: string;
+  discount_bps: number;
+  ends_at: string | null;
+  /** How many uses remain, when the offer has a limit. */
+  left: number | null;
+}
+
+export function readOffers(value: unknown): PublicOffer[] {
+  if (!Array.isArray(value)) return [];
+  return value
+    .filter((o): o is Record<string, unknown> => Boolean(o) && typeof o === 'object')
+    .map((o) => ({
+      code: String(o.code ?? '').toUpperCase(),
+      title: String(o.title ?? ''),
+      discount_bps: Number(o.discount_bps) || 0,
+      ends_at: typeof o.ends_at === 'string' ? o.ends_at : null,
+      left: typeof o.left === 'number' ? o.left : null,
+    }))
+    .filter((o) => /^[A-Z0-9]{4,16}$/.test(o.code) && o.discount_bps > 0);
+}
+
+/** "Ends today", "Ends tomorrow", "Ends in 5 days", "Ends 12 Oct", or "" for no end. */
+export function endsLabel(endsAt: string | null, now = new Date()): string {
+  if (!endsAt) return '';
+  const end = new Date(endsAt);
+  if (Number.isNaN(end.getTime())) return '';
+  const day = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((day(end) - day(now)) / 86_400_000);
+  if (days <= 0) return 'Ends today';
+  if (days === 1) return 'Ends tomorrow';
+  if (days <= 7) return `Ends in ${days} days`;
+  return `Ends ${end.toLocaleDateString(undefined, { day: 'numeric', month: 'short' })}`;
+}

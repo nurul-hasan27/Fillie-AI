@@ -17,7 +17,7 @@ export const SUPABASE_STUBS = `
 `;
 
 export const MIGRATIONS = [
-  '0001_init', '0002_payments_feedback_admin', '0003_table_grants', '0004_offered_ctc', '0005_influencers', '0006_influencer_api', '0007_influencer_admin',
+  '0001_init', '0002_payments_feedback_admin', '0003_table_grants', '0004_offered_ctc', '0005_influencers', '0006_influencer_api', '0007_influencer_admin', '0008_public_offers',
 ];
 
 /** An in-memory Postgres with every migration applied. */

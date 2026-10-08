@@ -2,7 +2,7 @@ import type { AccountStatus } from '../../shared/messages';
 import { formatRelativeTime } from '../../core/text';
 import { escapeHtml, html, type TemplateResult } from '../../ui/dom';
 import { banner, sectionIntro } from '../controls';
-import { formatMoney, percentLabel, type QuoteSet } from '../../core/cloud/money';
+import { endsLabel, formatMoney, percentLabel, type PublicOffer, type QuoteSet } from '../../core/cloud/money';
 
 /** Account page: plan, sign-in, and cloud backup. */
 
@@ -19,6 +19,8 @@ export interface AccountState {
   codeNote: string;
   /** False when the checkout function is too old to price codes. */
   codesSupported: boolean;
+  /** The "Explore offers" window: closed (null), loading, or the admin's public offers. */
+  offers: { open: boolean; loading: boolean; error: string; list: PublicOffer[] };
   message?: { tone: 'info' | 'danger'; text: string };
 }
 
@@ -30,7 +32,10 @@ function codeBox(state: AccountState): TemplateResult {
   const applied = [...(inr?.applied ?? [])].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'promo' ? -1 : 1));
   return html`
     <div class="code-box">
-      <label class="ff-field-label" for="promo-code">Have a creator code or an offer code?</label>
+      <div class="code-head">
+        <label class="ff-field-label" for="promo-code">Have a creator code or an offer code? <span class="code-multi">(multiple coupons applicable)</span></label>
+        <button class="ff-btn ff-btn-ghost code-explore" type="button" data-action="explore-offers">Explore offers</button>
+      </div>
       <div class="code-row">
         <input class="ff-input" id="promo-code" maxlength="16" placeholder="Enter code" autocomplete="off" spellcheck="false" style="text-transform:uppercase" />
         <button class="ff-btn ff-btn-secondary" type="button" data-action="apply-code" ${state.codeBusy ? 'disabled' : ''}>${state.codeBusy ? '…' : 'Apply'}</button>
@@ -54,6 +59,36 @@ function codeBox(state: AccountState): TemplateResult {
                 </div>`
               : ''}`
         : ''}
+    </div>
+  `;
+}
+
+/** The "Explore offers" window: the admin's public offers, each with an Apply button. */
+function offersModal(state: AccountState): TemplateResult {
+  const { loading, error, list } = state.offers;
+  const applied = new Set(state.codes);
+  return html`
+    <div class="offers-back" data-action="close-offers">
+      <div class="offers-modal" role="dialog" aria-modal="true" aria-label="Offers" data-keep-open="true">
+        <button class="offers-close" type="button" data-action="close-offers" aria-label="Close">×</button>
+        <h2 class="ff-title">Offers for you</h2>
+        <p class="offers-note"><b>Tip:</b> enter a creator's promo code too, for an additional discount on top of any offer.</p>
+        ${loading ? html`<div class="db-empty"><span class="ff-spinner"></span></div>` : ''}
+        ${error ? html`<p class="code-note" role="alert">${escapeHtml(error)}</p>` : ''}
+        ${!loading && !error && list.length === 0 ? html`<p class="ff-meta">No public offers right now. Check back soon, or enter a creator's code.</p>` : ''}
+        <ul class="offers-list">
+          ${list.map((offer) => html`
+            <li>
+              <span class="offer-pct">${escapeHtml(percentLabel(offer.discount_bps))}<small>off</small></span>
+              <span class="offer-main"><b>${escapeHtml(offer.title || 'Offer')}</b>
+                <small>${escapeHtml([endsLabel(offer.ends_at), offer.left !== null ? `${offer.left} left` : ''].filter(Boolean).join(' · ') || 'No end date')}</small>
+                <code>${escapeHtml(offer.code)}</code></span>
+              ${applied.has(offer.code)
+                ? html`<span class="offer-applied">Applied ✓</span>`
+                : html`<button class="ff-btn ff-btn-primary" type="button" data-action="use-offer" data-code="${escapeHtml(offer.code)}">Apply</button>`}
+            </li>`)}
+        </ul>
+      </div>
     </div>
   `;
 }
@@ -216,6 +251,7 @@ export function accountView(state: AccountState): TemplateResult {
           ${status.cloudConfigured ? '' : banner({ tone: 'warning', title: 'Cloud is not set up', body: 'This is a development build, so Fillie is unlimited and sign-in is off. Add your Supabase keys in src/core/cloud/config.ts.' })}
           ${planCard(status, state)}
           ${status.access.signedIn ? html`${signedIn(status)}${feedbackCard(state)}` : status.cloudConfigured ? signIn(state) : ''}
+          ${state.offers.open ? offersModal(state) : ''}
         `}
   `;
 }

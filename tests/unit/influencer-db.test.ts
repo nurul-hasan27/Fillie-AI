@@ -408,6 +408,38 @@ describe('admin views, fraud flags and settings', () => {
   });
 });
 
+describe('explore offers', () => {
+  it('lists only live, listed, not-used-up offers to signed-in customers, never creator codes', async () => {
+    await asUser(ids.admin!);
+    await call('admin_offer_save', { code: 'PUBLIC10', title: 'Public sale', discount_percent: 10 });
+    await call('admin_offer_save', { code: 'HIDDEN15', title: 'Secret', discount_percent: 15, listed: false });
+    await call('admin_offer_save', { code: 'PAUSED20', title: 'Paused', discount_percent: 20, active: false });
+    await asUser(ids.cust1!);
+    const offers = await call('list_public_offers');
+    const codes = offers.map((o: any) => o.code);
+    expect(codes).toContain('PUBLIC10');
+    expect(codes).toContain('DIWALI5');
+    for (const hidden of ['HIDDEN15', 'PAUSED20', 'OLDONE', 'SOONONE', 'ONLYONE', 'RAVI10']) expect(codes, hidden).not.toContain(hidden);
+    expect(offers.every((o: any) => !('id' in o) && !('note' in o))).toBe(true);
+    expect(offers[0].discount_bps).toBeGreaterThanOrEqual(offers[offers.length - 1].discount_bps); // best first
+    // The hidden offer still works when typed in.
+    expect((await call('checkout_resolve', 'HIDDEN15', ids.cust1)).kind).toBe('offer');
+  });
+
+  it('is closed to visitors who are not signed in, and the admin list shows which offers are public', async () => {
+    await asUser(null);
+    await fails(call('list_public_offers'), /not signed in/);
+    await asUser(ids.admin!);
+    const rows = await call('admin_discount_offers');
+    expect(rows.find((o: any) => o.code === 'HIDDEN15').listed).toBe(false);
+    expect(rows.find((o: any) => o.code === 'PUBLIC10').listed).toBe(true);
+    const saved = rows.find((o: any) => o.code === 'PUBLIC10');
+    await call('admin_offer_save', { id: saved.id, code: 'PUBLIC10', title: 'Public sale', discount_percent: 10, listed: false });
+    await asUser(ids.cust1!);
+    expect((await call('list_public_offers')).map((o: any) => o.code)).not.toContain('PUBLIC10');
+  });
+});
+
 describe('permissions', () => {
   it('keeps every admin function closed to ordinary signed-in users', async () => {
     await asUser(ids.asha!);

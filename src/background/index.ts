@@ -19,7 +19,8 @@ import { AccessService } from '../core/cloud/access';
 import { ApplicationStore } from '../core/cloud/applications';
 import { BackupService } from '../core/cloud/backup';
 import { CLOUD, isCloudConfigured } from '../core/cloud/config';
-import { readQuote } from '../core/cloud/money';
+import { readOffers, readQuote } from '../core/cloud/money';
+import { checkReminders, NOTIFICATION_PREFIX, REMINDER_ALARM, REMINDERS_KEY, REMINDERS_SENT_KEY, type SentMap } from './reminders';
 import type { DeviceSignals, OAuthProvider } from '../core/cloud/types';
 import { extractDetails } from '../core/engine/intel';
 import { createAuthWindow, type WindowsApi } from './popup-window';
@@ -655,6 +656,16 @@ async function handleCheckoutQuote(codes: string[]) {
   }
 }
 
+/** The offers the admin chose to show customers. Creator codes are never in this list. */
+async function handleListOffers() {
+  try {
+    const rows = await cloud.json<unknown>('/rest/v1/rpc/list_public_offers', { method: 'POST', body: '{}' });
+    return { ok: true as const, offers: readOffers(rows) };
+  } catch (error) {
+    return authError(error);
+  }
+}
+
 async function handleCheckout(currency: 'INR' | 'USD', codes: string[] = []) {
   try {
     const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: JSON.stringify({ currency, codes: cleanCodes(codes) }) });
@@ -857,6 +868,8 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
       return handleCheckout(message.currency, message.codes);
     case 'fillie:checkout-quote':
       return handleCheckoutQuote(message.codes);
+    case 'fillie:list-offers':
+      return handleListOffers();
     case 'fillie:feedback':
       return handleFeedback(message);
     case 'fillie:set-share-offers':
@@ -944,9 +957,41 @@ chromeApi?.storage?.onChanged?.addListener((changes, area) => {
   if (watched.some((key) => key in changes)) scheduleBackup();
 });
 
+/**
+ * Interview reminders: every 15 minutes the worker looks at the saved interviews and, for any that
+ * are a day or an hour away, shows a notification once. They can be switched off in Settings > Privacy.
+ */
+async function runReminders(): Promise<void> {
+  const notifications = chromeApi?.notifications;
+  if (!notifications) return;
+  await checkReminders({
+    enabled: async () => (await storage.read<boolean>(REMINDERS_KEY)) !== false,
+    upcoming: async () => (await applications.summary()).upcoming,
+    readSent: async () => (await storage.read<SentMap>(REMINDERS_SENT_KEY)) ?? {},
+    writeSent: (sent) => storage.put(REMINDERS_SENT_KEY, sent),
+    notify: (id, title, message) =>
+      notifications.create(id, { type: 'basic', iconUrl: chromeApi!.runtime.getURL('assets/icon-128.png'), title, message, priority: 1 }),
+  }).catch(() => undefined);
+}
+
+function scheduleReminders(): void {
+  chromeApi?.alarms?.create(REMINDER_ALARM, { delayInMinutes: 1, periodInMinutes: 15 });
+}
+scheduleReminders();
+chromeApi?.alarms?.onAlarm?.addListener((alarm) => {
+  if (alarm.name === REMINDER_ALARM) void runReminders();
+});
+chromeApi?.notifications?.onClicked?.addListener((id) => {
+  if (!id.startsWith(NOTIFICATION_PREFIX)) return;
+  void chromeApi?.tabs?.create({ url: chromeApi.runtime.getURL('pages/app.html#/database') });
+  chromeApi?.notifications?.clear(id);
+});
+
 runtime?.onInstalled?.addListener(() => {
   storage.getSettings().catch(() => undefined);
+  scheduleReminders();
 });
+runtime?.onStartup?.addListener(() => void runReminders());
 
 /**
  * The manifest advertises an `Alt+Shift+F` shortcut. It is wired to the same

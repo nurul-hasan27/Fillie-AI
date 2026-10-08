@@ -374,7 +374,7 @@ export function memorySettingsView(count: number, cacheCount: number): TemplateR
 
 /* ------------------------------------------------------------------ */
 
-export function privacyView(settings: AISettings): TemplateResult {
+export function privacyView(settings: AISettings, reminders = true): TemplateResult {
   const provider = PROVIDER_PRESETS.find((entry) => entry.id === settings.config.provider);
   return html`
     ${sectionIntro('Privacy', 'What Fillie sends, and what it never sends.')}
@@ -422,6 +422,19 @@ export function privacyView(settings: AISettings): TemplateResult {
             `,
           )}
         </ul>
+      `,
+    )}
+    ${card(
+      'Interview reminders',
+      html`
+        <div class="stack-md">
+          <label class="ff-switch">
+            <input type="checkbox" data-action="toggle-reminders" ${reminders ? 'checked' : ''} />
+            <span class="ff-switch-track"><span class="ff-switch-thumb"></span></span>
+            <span class="ff-body">Notify me a day before and an hour before each interview in my Database</span>
+          </label>
+          <p class="ff-hint">Fillie checks your saved interviews every 15 minutes. Nothing is sent anywhere; the notification is made on this device.</p>
+        </div>
       `,
     )}
     ${card(

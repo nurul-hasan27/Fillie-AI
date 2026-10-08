@@ -466,4 +466,54 @@ test.describe('popup polish', () => {
     // Blue is the one filled button while there is a form to fill; with no form on the page it goes flat grey.
     expect(['rgb(0, 117, 222)', 'rgb(239, 237, 235)']).toContain(style.cta);
   });
+
+  test('the popup follows the theme chosen in Appearance, and the header always fits', async ({ fillie }) => {
+    // The system is light; the extension is told to be dark.
+    await fillie.control.evaluate(() => chrome.storage.local.set({ 'fillie:theme': 'dark' }));
+    const popup = await fillie.context.newPage();
+    await popup.emulateMedia({ colorScheme: 'light' });
+    await popup.setViewportSize({ width: 380, height: 700 });
+    await popup.goto(`chrome-extension://${fillie.extensionId}/pages/popup.html`);
+    await popup.waitForSelector('.pop-total b', { timeout: 20_000 });
+    await expect(popup.locator('html')).toHaveAttribute('data-theme', 'dark');
+    expect(await popup.locator('.popup').evaluate((el) => getComputedStyle(el).backgroundColor)).toBe('rgb(25, 25, 24)');
+
+    await fillie.control.evaluate(() => chrome.storage.local.set({ 'fillie:theme': 'light' }));
+    await popup.reload();
+    await popup.waitForSelector('.pop-total b');
+    await expect(popup.locator('html')).toHaveAttribute('data-theme', 'light');
+
+    // "System" follows the browser.
+    await fillie.control.evaluate(() => chrome.storage.local.set({ 'fillie:theme': 'system' }));
+    await popup.emulateMedia({ colorScheme: 'dark' });
+    await popup.reload();
+    await popup.waitForSelector('.pop-total b');
+    await expect(popup.locator('html')).toHaveAttribute('data-theme', 'dark');
+    await fillie.control.evaluate(() => chrome.storage.local.remove('fillie:theme'));
+
+    // The header is just the logo and the buttons, and the open-Fillie button stays inside the window.
+    expect(await popup.locator('.pop-name').count()).toBe(0);
+    const box = await popup.locator('.pop-ext').boundingBox();
+    expect(box!.x + box!.width).toBeLessThanOrEqual(380 - 8);
+    expect(await popup.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(380);
+  });
+
+  test('"Get premium" is the brightest thing in the header, and a signed-in user shows only their initial', async ({ fillie }) => {
+    const popup = await openPopup(fillie);
+    const bg = await popup.locator('.pop-getpremium').evaluate((el) => getComputedStyle(el).backgroundColor);
+    expect(bg).toBe('rgb(255, 177, 16)'); // marigold
+    await expect(popup.locator('.pop-getpremium svg.pop-crown')).toBeVisible();
+    await popup.evaluate(async () => {
+      const cache = (await chrome.storage.local.get('fillie:popup-cache'))['fillie:popup-cache'];
+      cache.status.access = { allowed: true, plan: 'trial', remaining: 2, limit: 3, signedIn: true, email: 'a.very.long.email.address.indeed@example-company.com' };
+      cache.at = Date.now();
+      await chrome.storage.local.set({ 'fillie:popup-cache': cache, 'fillie:popup-dirty': 0 });
+    });
+    await popup.reload();
+    await popup.waitForSelector('.pop-user');
+    await expect(popup.locator('.pop-user')).toHaveText('A');
+    expect(await popup.locator('.pop-user-email').count()).toBe(0);
+    const ext = await popup.locator('.pop-ext').boundingBox();
+    expect(ext!.x + ext!.width).toBeLessThanOrEqual(372);
+  });
 });
