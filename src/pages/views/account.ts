@@ -33,7 +33,7 @@ function codeBox(state: AccountState): TemplateResult {
   return html`
     <div class="code-box">
       <div class="code-head">
-        <label class="ff-field-label" for="promo-code">Have a creator code or an offer code? <span class="code-multi">(multiple coupons applicable)</span></label>
+        <label class="ff-field-label" for="promo-code">Have a creator code or an offer code?</label>
         <button class="ff-btn ff-btn-ghost code-explore" type="button" data-action="explore-offers">Explore offers</button>
       </div>
       <div class="code-row">

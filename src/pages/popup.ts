@@ -99,8 +99,9 @@ function render(state: {
 
   const header = html`
     <header class="pop-head rise" style="--i:0">
-      <div class="pop-brand" role="img" aria-label="Fillie">
+      <div class="pop-brand">
         <span class="pop-mark" aria-hidden="true"></span>
+        <strong class="pop-name">Fillie</strong>
       </div>
       <div class="pop-head-right">
         ${account}${premium}

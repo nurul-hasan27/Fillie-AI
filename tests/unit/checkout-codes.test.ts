@@ -92,9 +92,9 @@ describe('Explore offers', () => {
     { code: 'FIRST100', title: 'First 100 users', discount_bps: 1500, ends_at: '2099-01-01T00:00:00Z', left: 12 },
   ];
 
-  it('says that several coupons can be used together, and offers the explore button', () => {
+  it('offers the explore button, without a "multiple coupons" note', () => {
     const page = render(state());
-    expect(page.querySelector('.code-multi')?.textContent).toBe('(multiple coupons applicable)');
+    expect(page.textContent).not.toContain('multiple coupons');
     expect(page.querySelector('[data-action="explore-offers"]')?.textContent).toBe('Explore offers');
     expect(page.querySelector('.offers-modal')).toBeNull();
   });

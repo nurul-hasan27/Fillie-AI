@@ -160,7 +160,7 @@ test('Explore offers shows the admin\'s public offers (never creator codes) and 
   const page = await open(browser, '/', 'rahul@example.com');
   await page.getByRole('button', { name: 'Pay ₹449 or $5' }).click();
   const modal = page.getByRole('dialog');
-  await expect(modal.getByText('(multiple coupons applicable)')).toBeVisible();
+  await expect(modal).not.toContainText('multiple coupons');
   await modal.getByRole('button', { name: 'Explore offers' }).click();
   await expect(modal.locator('.offers-note')).toContainText("creator's promo code");
   const rows = modal.locator('.offers-list li');
@@ -173,6 +173,31 @@ test('Explore offers shows the admin\'s public offers (never creator codes) and 
   await rows.first().getByRole('button', { name: 'Apply' }).click();
   await expect(modal.locator('.code-applied li')).toContainText('DIWALI5');
   await expect(modal.getByRole('button', { name: /Pay .*₹426\.55/ })).toBeVisible();
+  await page.close();
+});
+
+test('only one creator code and one offer can be used; a new one of the same kind replaces the old one', async ({ browser }) => {
+  await fake.sql(`insert into public.discount_offers (code, title, discount_bps, listed) values ('SECOND10', 'Second offer', 1000, false)`);
+  await fake.sql(`insert into public.promo_codes (influencer_id, code, discount_bps, commission_bps) select influencer_id, 'ASHATWO', 1000, 1000 from public.promo_codes where code = 'ASHA10'`);
+  const page = await open(browser, '/', 'rahul@example.com');
+  await page.getByRole('button', { name: 'Pay ₹449 or $5' }).click();
+  const modal = page.getByRole('dialog');
+  const apply = async (code: string) => {
+    await modal.getByPlaceholder('Enter code').fill(code);
+    await modal.getByRole('button', { name: 'Apply' }).click();
+  };
+  const shown = () => modal.locator('.code-applied li b').allInnerTexts();
+  await apply('asha10');
+  await apply('diwali5');
+  await expect.poll(shown).toEqual(['ASHA10', 'DIWALI5']);
+  await apply('second10');
+  await expect.poll(shown).toEqual(['ASHA10', 'SECOND10']);
+  await expect(modal.locator('.code-note')).toContainText('SECOND10 replaced DIWALI5');
+  await apply('ashatwo');
+  await expect.poll(shown).toEqual(['ASHATWO', 'SECOND10']);
+  await expect(modal.locator('.code-note')).toContainText('ASHATWO replaced ASHA10');
+  await expect(modal.getByRole('button', { name: /Pay .*₹363\.69/ })).toBeVisible(); // 449 -10% -10%
+  await expect(modal.locator('.code-applied li')).toHaveCount(2);
   await page.close();
 });
 
@@ -192,7 +217,7 @@ test('the creator\'s dashboard shows the order, privately, with the money still 
   await expect(page.locator('.code-card').first()).toContainText('ASHA10');
   await page.getByPlaceholder('e.g. ASHAYT').fill('ashayt');
   await page.getByRole('button', { name: 'Create code' }).click();
-  await expect(page.locator('.code-card')).toHaveCount(2);
+  await expect(page.locator('.code-card')).toHaveCount(3); // ASHA10, the extra ASHATWO added above, and the new ASHAYT
   await page.getByPlaceholder('e.g. ASHAYT').fill('ASHA10');
   await page.getByRole('button', { name: 'Create code' }).click();
   await expect(page.getByRole('alert')).toContainText('already taken');

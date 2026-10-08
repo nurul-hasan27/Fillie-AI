@@ -11,6 +11,8 @@ const STUB = () => {
   const codes: Record<string, { kind: 'promo' | 'offer'; bps: number; title: string }> = {
     ASHA10: { kind: 'promo', bps: 1000, title: 'Creator code · Asha' },
     DIWALI5: { kind: 'offer', bps: 500, title: 'Diwali sale' },
+    FIRST100: { kind: 'offer', bps: 1500, title: 'First 100 users' },
+    ASHA20: { kind: 'promo', bps: 2000, title: 'Creator code · Asha' },
   };
   const quote = (currency: 'INR' | 'USD', asked: string[]) => {
     const list = currency === 'INR' ? 44900 : 500;
@@ -86,11 +88,40 @@ test.describe('Account: creator and offer codes', () => {
     await page.close();
   });
 
+  test('only one creator code and one offer can be used: a new one of the same kind replaces the old one', async ({ fillie }) => {
+    const page = await fillie.context.newPage();
+    await page.addInitScript(STUB);
+    await page.goto(`chrome-extension://${fillie.extensionId}/pages/app.html#/account`);
+    const apply = async (code: string) => {
+      await page.locator('#promo-code').fill(code);
+      await page.locator('[data-action="apply-code"]').click();
+    };
+    const shown = () => page.locator('.code-applied li .code-name b').allInnerTexts();
+    await apply('asha10');
+    await apply('diwali5');
+    await expect.poll(shown).toEqual(['ASHA10', 'DIWALI5']);
+
+    await apply('first100'); // a second offer
+    await expect.poll(shown).toEqual(['ASHA10', 'FIRST100']);
+    await expect(page.locator('.code-note')).toContainText('FIRST100 replaced DIWALI5');
+    await expect(page.locator('.price-sum .total')).toContainText('₹343.48'); // 449 -10% = 404.10, then -15% = 343.48
+
+    await apply('asha20'); // a second creator code
+    await expect.poll(shown).toEqual(['ASHA20', 'FIRST100']);
+    await expect(page.locator('.code-note')).toContainText('ASHA20 replaced ASHA10');
+    expect(await page.locator('.code-applied li').count()).toBe(2); // never more than two codes in all
+
+    // What goes to the payment is the same two codes.
+    await page.locator('[data-action="checkout"][data-currency="INR"]').click();
+    await expect.poll(() => page.evaluate(() => (window as unknown as { __calls: Array<{ type: string; codes?: string[] }> }).__calls.filter((c) => c.type === 'fillie:checkout').map((c) => [...(c.codes ?? [])].sort()))).toEqual([['ASHA20', 'FIRST100']]);
+    await page.close();
+  });
+
   test('Explore offers lists the admin\'s public offers, and Apply puts one on the order', async ({ fillie }) => {
     const page = await fillie.context.newPage();
     await page.addInitScript(STUB);
     await page.goto(`chrome-extension://${fillie.extensionId}/pages/app.html#/account`);
-    await expect(page.locator('.code-multi')).toHaveText('(multiple coupons applicable)');
+    expect(await page.locator('.code-head').innerText()).not.toContain('multiple coupons');
     await page.locator('[data-action="explore-offers"]').click();
     const modal = page.locator('.offers-modal');
     await expect(modal).toBeVisible();

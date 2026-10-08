@@ -80,6 +80,7 @@ html { background: #f6f5f4; overflow: hidden; }
 }
 
 .pop-brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
+.pop-name { font-family: var(--ff-font-serif); font-size: 20px; font-weight: 500; letter-spacing: -0.02em; line-height: 1; }
 .pop-mark { width: 38px; height: 38px; flex: none; border-radius: 10px; background: url('../assets/icon-48.png') center / contain no-repeat; }
 
 .pop-head-right { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }

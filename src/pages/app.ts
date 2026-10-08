@@ -1759,7 +1759,11 @@ async function refreshQuotes(codes: string[], typed?: string): Promise<void> {
     if (result.ok && result.quotes) {
       state.account.quotes = result.quotes;
       state.account.codes = result.quotes.INR.applied.map((a) => a.code);
-      state.account.codeNote = rejectionNote(result.quotes.INR);
+      // Only one creator code and one offer can be used: a new code of the same kind replaces the old one.
+      const replaced = result.quotes.INR.rejected.filter((r) => r.reason === 'same_kind').map((r) => r.code);
+      state.account.codeNote =
+        rejectionNote(result.quotes.INR) ||
+        (typed && replaced.length && state.account.codes.includes(typed) ? `Only one creator code and one offer can be used, so ${typed} replaced ${replaced.join(', ')}.` : '');
       state.account.codesSupported = true;
     } else if (result.unsupported) {
       state.account.codesSupported = false;
