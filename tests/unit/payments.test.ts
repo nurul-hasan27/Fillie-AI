@@ -6,12 +6,18 @@ function fakeDb(options: { denyTable?: string; deniedOp?: string } = {}) {
   const payments = new Map<string, Record<string, unknown>>();
   const entitlements = new Map<string, Record<string, unknown>>();
   const calls: string[] = [];
+  const rpcCalls: Array<{ fn: string; args?: Record<string, unknown> }> = [];
   const denied = (table: string, op: string): DbError | null =>
     options.denyTable === table && (!options.deniedOp || options.deniedOp === op)
       ? { code: '42501', message: `permission denied for table ${table}` }
       : null;
 
   const client: AdminClient = {
+    async rpc(fn, args) {
+      rpcCalls.push({ fn, args });
+      const error = denied('rpc', fn);
+      return { data: {}, error };
+    },
     from(table) {
       return {
         async upsert(row, opts) {
@@ -40,7 +46,7 @@ function fakeDb(options: { denyTable?: string; deniedOp?: string } = {}) {
       };
     },
   };
-  return { client, payments, entitlements, calls };
+  return { client, payments, entitlements, calls, rpcCalls };
 }
 
 const payment = { userId: 'user-1', provider: 'razorpay' as const, ref: 'plink_test_1', amountMinor: 500, currency: 'usd' };
@@ -90,5 +96,36 @@ describe('recordPayment', () => {
     const log = vi.spyOn(console, 'error').mockImplementation(() => undefined);
     await recordPayment(fakeDb({ denyTable: 'payments' }).client, payment);
     expect(String(log.mock.calls[0][0])).not.toMatch(/sk_|whsec|service_role|Bearer/i);
+  });
+
+  it('stores how the price was made up and asks the database to credit the influencer', async () => {
+    const db = fakeDb();
+    const order = { ...payment, ref: 'plink_promo_1', currency: 'INR', amountMinor: 36369, promoCodeId: '11111111-1111-1111-1111-111111111111', offerId: '22222222-2222-2222-2222-222222222222', listAmountMinor: 44900, promoDiscountMinor: 4490, offerDiscountMinor: 4041 };
+    expect(await recordPayment(db.client, order)).toEqual({ ok: true });
+    expect(db.payments.get('plink_promo_1')).toMatchObject({ amount_minor: 36369, list_amount_minor: 44900, promo_discount_minor: 4490, offer_discount_minor: 4041, promo_code_id: order.promoCodeId, offer_id: order.offerId });
+    expect(db.rpcCalls).toEqual([{ fn: 'finalize_order', args: { p_ref: 'plink_promo_1' } }]);
+  });
+
+  it('does not touch the influencer ledger for an ordinary payment', async () => {
+    const db = fakeDb();
+    await recordPayment(db.client, payment);
+    expect(db.rpcCalls).toEqual([]);
+    expect(db.payments.get('plink_test_1')).toMatchObject({ promo_discount_minor: 0, offer_discount_minor: 0 });
+  });
+
+  it('still unlocks the customer when crediting the influencer fails, and asks to be retried', async () => {
+    vi.spyOn(console, 'error').mockImplementation(() => undefined);
+    const db = fakeDb({ denyTable: 'rpc', deniedOp: 'finalize_order' });
+    const result = await recordPayment(db.client, { ...payment, promoCodeId: '11111111-1111-1111-1111-111111111111' });
+    expect(result).toMatchObject({ ok: false, step: 'finalize_order (influencer commission)' });
+    expect(db.entitlements.get('user-1')).toMatchObject({ paid: true });
+  });
+
+  it('retries the commission for a customer who was already unlocked', async () => {
+    const db = fakeDb();
+    const withCode = { ...payment, promoCodeId: '11111111-1111-1111-1111-111111111111' };
+    await recordPayment(db.client, withCode);
+    await recordPayment(db.client, withCode);
+    expect(db.rpcCalls).toHaveLength(2); // finalize_order is idempotent in the database
   });
 });

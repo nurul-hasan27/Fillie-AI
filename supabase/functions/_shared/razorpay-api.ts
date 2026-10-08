@@ -16,6 +16,12 @@ export interface PaidLink {
   ref: string;
   amountMinor: number;
   currency: string;
+  /** How the price was made up, copied from the notes our own checkout wrote on the link. */
+  promoCodeId?: string;
+  offerId?: string;
+  listAmountMinor?: number;
+  promoDiscountMinor?: number;
+  offerDiscountMinor?: number;
 }
 
 interface LinkEntity {
@@ -24,7 +30,7 @@ interface LinkEntity {
   amount?: number;
   amount_paid?: number;
   currency?: string;
-  notes?: { user_id?: string } | unknown[];
+  notes?: Record<string, string> | unknown[];
   payments?: Array<{ payment_id?: string; status?: string }> | null;
 }
 
@@ -33,15 +39,22 @@ const authHeader = (keyId: string, keySecret: string) => ({ Authorization: `Basi
 /** Turns a Razorpay link into a paid record, or null when it is not paid or not ours. */
 export function toPaidLink(link: LinkEntity | null | undefined): PaidLink | null {
   if (!link || link.status !== 'paid') return null;
-  const notes = link.notes as { user_id?: string } | undefined;
-  const userId = notes && !Array.isArray(notes) ? notes.user_id : undefined;
+  const notes = (link.notes && !Array.isArray(link.notes) ? link.notes : {}) as Record<string, string | undefined>;
+  const userId = notes.user_id;
   if (!userId) return null;
   if (!link.id) return null;
+  const uuid = (value: string | undefined) => (value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value) ? value : undefined);
+  const minor = (value: string | undefined) => (value && /^\d{1,9}$/.test(value) ? Number(value) : undefined);
   return {
     userId,
     ref: link.id,
     amountMinor: link.amount_paid ?? link.amount ?? 0,
     currency: link.currency ?? 'INR',
+    promoCodeId: uuid(notes.promo_id),
+    offerId: uuid(notes.offer_id),
+    listAmountMinor: minor(notes.list_minor),
+    promoDiscountMinor: minor(notes.promo_off),
+    offerDiscountMinor: minor(notes.offer_off),
   };
 }
 

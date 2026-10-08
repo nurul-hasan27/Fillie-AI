@@ -24,3 +24,44 @@ function positive(value: string | undefined, fallback: number): number {
   const n = Number(value);
   return Number.isInteger(n) && n >= 100 ? n : fallback;
 }
+
+export interface PricedOrder {
+  currency: Currency;
+  /** The list price before any code. */
+  listMinor: number;
+  /** Discount from an influencer's promo code. */
+  promoOffMinor: number;
+  /** Extra discount from an offer code, taken off the price after the promo. */
+  offerOffMinor: number;
+  /** What the customer pays. */
+  finalMinor: number;
+}
+
+/** Smallest amount Razorpay accepts for a payment link (₹1 / $1). */
+export const MIN_CHARGE_MINOR = 100;
+
+/**
+ * Applies a promo code and then an offer code. The offer is a percentage of the price that is
+ * left after the promo, so the two stack but can never take the price below the minimum charge.
+ */
+export function priceOrder(price: Price, promoBps: number, offerBps: number): PricedOrder {
+  const list = price.amountMinor;
+  const promoOff = promoBps > 0 ? Math.round((list * promoBps) / 10_000) : 0;
+  const afterPromo = list - promoOff;
+  const offerRaw = offerBps > 0 ? Math.round((afterPromo * offerBps) / 10_000) : 0;
+  const finalMinor = Math.max(MIN_CHARGE_MINOR, afterPromo - offerRaw);
+  return { currency: price.currency, listMinor: list, promoOffMinor: promoOff, offerOffMinor: afterPromo - finalMinor, finalMinor };
+}
+
+/** Up to two codes (one promo, one offer), trimmed, upper-cased and de-duplicated. Anything else is dropped. */
+export function parseCodes(input: unknown): string[] {
+  if (!Array.isArray(input)) return [];
+  const seen = new Set<string>();
+  for (const raw of input) {
+    if (typeof raw !== 'string') continue;
+    const code = raw.replace(/\s+/g, '').toUpperCase();
+    if (/^[A-Z0-9]{4,16}$/.test(code)) seen.add(code);
+    if (seen.size === 2) break;
+  }
+  return [...seen];
+}

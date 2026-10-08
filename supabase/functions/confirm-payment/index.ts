@@ -27,7 +27,7 @@ Deno.serve(async (req) => {
   const paid = await listPaidLinksFor(fetch, keyId, keySecret, user.id);
   let confirmed = 0;
   for (const link of paid) {
-    const result = await recordPayment(admin, { userId: user.id, provider: 'razorpay', ref: link.ref, amountMinor: link.amountMinor, currency: link.currency });
+    const result = await recordPayment(admin, { ...link, userId: user.id, provider: 'razorpay' });
     if (result.ok) confirmed += 1;
   }
   console.log(JSON.stringify({ event: 'confirm_payment', user_id: user.id, paid_links: paid.length, confirmed }));

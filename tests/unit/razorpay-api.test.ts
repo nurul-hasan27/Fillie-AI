@@ -12,6 +12,15 @@ describe('Razorpay payment link checks', () => {
     expect(toPaidLink(null)).toBeNull();
   });
 
+  it('reads the price breakdown our checkout wrote into the notes, and ignores malformed values', () => {
+    const notes = { user_id: 'u1', promo_id: '11111111-1111-1111-1111-111111111111', offer_id: '22222222-2222-2222-2222-222222222222', list_minor: '44900', promo_off: '4490', offer_off: '4041' };
+    expect(toPaidLink({ ...paidLink, notes })).toMatchObject({ promoCodeId: notes.promo_id, offerId: notes.offer_id, listAmountMinor: 44900, promoDiscountMinor: 4490, offerDiscountMinor: 4041 });
+    const messy = toPaidLink({ ...paidLink, notes: { user_id: 'u1', promo_id: "x'; drop table", list_minor: '-5', promo_off: 'abc' } });
+    expect(messy?.promoCodeId).toBeUndefined();
+    expect(messy?.listAmountMinor).toBeUndefined();
+    expect(messy?.promoDiscountMinor).toBeUndefined();
+  });
+
   it('uses the link id as the one stable reference, whether or not Razorpay lists the payment id', () => {
     expect(toPaidLink({ ...paidLink, payments: null })?.ref).toBe('plink_ABC123xyz');
     expect(toPaidLink({ ...paidLink, payments: [] })?.ref).toBe('plink_ABC123xyz');
