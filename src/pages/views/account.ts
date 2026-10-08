@@ -2,6 +2,7 @@ import type { AccountStatus } from '../../shared/messages';
 import { formatRelativeTime } from '../../core/text';
 import { escapeHtml, html, type TemplateResult } from '../../ui/dom';
 import { banner, sectionIntro } from '../controls';
+import { formatMoney, percentLabel, type QuoteSet } from '../../core/cloud/money';
 
 /** Account page: plan, sign-in, and cloud backup. */
 
@@ -10,11 +11,63 @@ export interface AccountState {
   mode: 'signin' | 'signup';
   busy: string;
   feedbackRating: number;
+  /** Creator and offer codes the server has accepted for this buyer. */
+  codes: string[];
+  /** What each payment option costs with those codes; null until the server has answered. */
+  quotes: QuoteSet | null;
+  codeBusy: boolean;
+  codeNote: string;
+  /** False when the checkout function is too old to price codes. */
+  codesSupported: boolean;
   message?: { tone: 'info' | 'danger'; text: string };
 }
 
-function planCard(status: AccountStatus): TemplateResult {
-  const { access, priceLabel } = status;
+/** The code box and the price breakdown: every applied code with how much it takes off, in rupees and dollars. */
+function codeBox(state: AccountState): TemplateResult {
+  const inr = state.quotes?.INR;
+  const usd = state.quotes?.USD;
+  // Creator code first, then the offer, whatever order they were typed in.
+  const applied = [...(inr?.applied ?? [])].sort((a, b) => (a.kind === b.kind ? 0 : a.kind === 'promo' ? -1 : 1));
+  return html`
+    <div class="code-box">
+      <label class="ff-field-label" for="promo-code">Have a creator code or an offer code?</label>
+      <div class="code-row">
+        <input class="ff-input" id="promo-code" maxlength="16" placeholder="Enter code" autocomplete="off" spellcheck="false" style="text-transform:uppercase" />
+        <button class="ff-btn ff-btn-secondary" type="button" data-action="apply-code" ${state.codeBusy ? 'disabled' : ''}>${state.codeBusy ? '…' : 'Apply'}</button>
+      </div>
+      ${state.codeNote ? html`<p class="code-note" role="alert">${escapeHtml(state.codeNote)}</p>` : ''}
+      ${inr && usd
+        ? html`
+            <ul class="code-applied">
+              ${applied.map((a) => html`
+                <li>
+                  <span class="code-name"><b>${escapeHtml(a.code)}</b><small>${a.kind === 'promo' ? 'Creator code' : escapeHtml(a.title)} · ${a.kind === 'promo' ? percentLabel(a.discount_bps) : `${percentLabel(a.discount_bps)} extra`} off</small></span>
+                  <span class="code-cut">− ${escapeHtml(formatMoney(a.kind === 'promo' ? inr.order.promoOffMinor : inr.order.offerOffMinor, 'INR'))}<small>− ${escapeHtml(formatMoney(a.kind === 'promo' ? usd.order.promoOffMinor : usd.order.offerOffMinor, 'USD'))}</small></span>
+                  <button class="ff-btn ff-btn-ghost" type="button" data-action="remove-code" data-code="${escapeHtml(a.code)}" aria-label="Remove ${escapeHtml(a.code)}">Remove</button>
+                </li>`)}
+            </ul>
+            ${applied.length
+              ? html`<div class="price-sum" aria-label="Price breakdown">
+                  <div><span>Price</span><span>${escapeHtml(formatMoney(inr.order.listMinor, 'INR'))} <small>${escapeHtml(formatMoney(usd.order.listMinor, 'USD'))}</small></span></div>
+                  ${applied.map((a) => html`<div class="cut"><span>${escapeHtml(a.code)}</span><span>− ${escapeHtml(formatMoney(a.kind === 'promo' ? inr.order.promoOffMinor : inr.order.offerOffMinor, 'INR'))} <small>− ${escapeHtml(formatMoney(a.kind === 'promo' ? usd.order.promoOffMinor : usd.order.offerOffMinor, 'USD'))}</small></span></div>`)}
+                  <div class="total"><span>You pay</span><span>${escapeHtml(formatMoney(inr.order.finalMinor, 'INR'))} <small>${escapeHtml(formatMoney(usd.order.finalMinor, 'USD'))}</small></span></div>
+                </div>`
+              : ''}`
+        : ''}
+    </div>
+  `;
+}
+
+/** "₹383.89" with the full price crossed out when a code lowers it. */
+function priceLabel(quote: QuoteSet | null, currency: 'INR' | 'USD', fallback: string): TemplateResult {
+  const order = quote?.[currency].order;
+  if (!order || order.finalMinor === order.listMinor) return html`${escapeHtml(fallback)}`;
+  return html`<s class="was">${escapeHtml(fallback)}</s> ${escapeHtml(formatMoney(order.finalMinor, currency))}`;
+}
+
+function planCard(status: AccountStatus, state: AccountState): TemplateResult {
+  const { access, priceLabel: priceText } = status;
+  const pricePlain = priceText.replace(' one-time', '');
   if (access.plan === 'paid' && status.cloudConfigured) {
     return html`
       <div class="hero-card" data-tone="midnight">
@@ -32,12 +85,13 @@ function planCard(status: AccountStatus): TemplateResult {
     <div class="hero-card" data-tone="marigold">
       <div class="hero-copy">
         <h2>${left > 0 ? `${left} free ${left === 1 ? 'filling' : 'fillings'} left this week` : 'Free fillings used up'}</h2>
-        <p>Every week you get ${access.limit} free form fillings. Unlock Fillie once for ${escapeHtml(status.priceInrLabel)} (UPI, netbanking, cards) or ${escapeHtml(priceLabel)} (international card) and fill as many as you like.</p>
+        <p>Every week you get ${access.limit} free form fillings. Unlock Fillie once for ${escapeHtml(status.priceInrLabel)} (UPI, netbanking, cards) or ${escapeHtml(priceText)} (international card) and fill as many as you like.</p>
         <div class="dots" aria-hidden="true">${dots}</div>
+        ${access.signedIn && status.cloudConfigured && state.codesSupported ? codeBox(state) : ''}
         <div class="row-wrap" style="margin-top:14px">
           ${access.signedIn
-            ? html`<button class="ff-btn ff-btn-primary ff-btn-lg" type="button" data-action="checkout" data-currency="INR" ${status.cloudConfigured ? '' : 'disabled'}>Pay ${escapeHtml(status.priceInrLabel)} · UPI, netbanking, cards</button>
-                   <button class="ff-btn ff-btn-secondary ff-btn-lg" type="button" data-action="checkout" data-currency="USD" ${status.cloudConfigured ? '' : 'disabled'}>Pay ${escapeHtml(priceLabel.replace(' one-time', ''))} · international card</button>
+            ? html`<button class="ff-btn ff-btn-primary ff-btn-lg" type="button" data-action="checkout" data-currency="INR" ${status.cloudConfigured ? '' : 'disabled'}>Pay ${priceLabel(state.quotes, 'INR', status.priceInrLabel)} · UPI, netbanking, cards</button>
+                   <button class="ff-btn ff-btn-secondary ff-btn-lg" type="button" data-action="checkout" data-currency="USD" ${status.cloudConfigured ? '' : 'disabled'}>Pay ${priceLabel(state.quotes, 'USD', pricePlain)} · international card</button>
                    <button class="ff-btn ff-btn-ghost" type="button" data-action="refresh-payment">I have paid</button>`
             : html`<span class="hero-pill">Sign in below to unlock</span>`}
         </div>
@@ -160,7 +214,7 @@ export function accountView(state: AccountState): TemplateResult {
       ? html`<div class="db-empty"><span class="ff-spinner"></span></div>`
       : html`
           ${status.cloudConfigured ? '' : banner({ tone: 'warning', title: 'Cloud is not set up', body: 'This is a development build, so Fillie is unlimited and sign-in is off. Add your Supabase keys in src/core/cloud/config.ts.' })}
-          ${planCard(status)}
+          ${planCard(status, state)}
           ${status.access.signedIn ? html`${signedIn(status)}${feedbackCard(state)}` : status.cloudConfigured ? signIn(state) : ''}
         `}
   `;

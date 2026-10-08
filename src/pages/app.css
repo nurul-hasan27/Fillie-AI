@@ -1290,3 +1290,29 @@
   height: 1px;
   background: var(--ff-border);
 }
+
+/* Account: creator / offer codes and the price breakdown */
+.code-box {
+  margin-top: 16px;
+  padding: 14px 16px;
+  background: var(--ff-surface);
+  border: 1px solid var(--ff-border);
+  border-radius: var(--ff-radius-md);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 560px;
+}
+.code-row { display: flex; gap: 8px; }
+.code-row .ff-input { flex: 1; min-width: 0; font-weight: 600; letter-spacing: 0.04em; }
+.code-note { color: var(--ff-danger, #b3261e); font-size: 13px; }
+.code-applied { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 6px; }
+.code-applied li { display: flex; align-items: center; gap: 12px; padding: 8px 12px; background: #dff3e6; color: #17795e; border-radius: var(--ff-radius-md); }
+.code-name { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.code-name small, .code-cut small, .price-sum small { font-size: 12px; opacity: 0.75; font-weight: 500; }
+.code-cut { display: flex; flex-direction: column; align-items: flex-end; font-weight: 700; }
+.price-sum { border-top: 1px dashed var(--ff-border-strong); padding-top: 10px; display: flex; flex-direction: column; gap: 6px; font-size: 14px; }
+.price-sum > div { display: flex; justify-content: space-between; gap: 12px; }
+.price-sum .cut { color: #17795e; }
+.price-sum .total { font-weight: 700; font-size: 16px; padding-top: 6px; border-top: 1px solid var(--ff-border); }
+.ff-btn .was { opacity: 0.6; font-weight: 500; margin-right: 2px; }
