@@ -106,6 +106,12 @@ export class FillieOverlay {
   private aiSource = '';
   /** e.g. "2 free fillings left this week". */
   private planNote = '';
+  /** True when no AI platform is set up, so the panel offers the free setup. */
+  private aiMissing = false;
+
+  setAiMissing(missing: boolean): void {
+    this.aiMissing = missing;
+  }
 
   setPlanNote(text: string): void {
     this.planNote = text;
@@ -1265,6 +1271,24 @@ export class FillieOverlay {
     return wrap;
   }
 
+  /** Friendly nudge to add a free AI key, shown only when none is set up. */
+  private appendAiNudge(foot: HTMLElement): void {
+    if (!this.aiMissing) return;
+    const box = el('div', { class: 'ai-nudge', role: 'note' });
+    const head = el('div', { class: 'ai-nudge-head' });
+    head.appendChild(icon('sparkle', { size: 13 }));
+    head.appendChild(text('strong', {}, 'Answer the rest with free AI'));
+    box.appendChild(head);
+    box.appendChild(
+      text('p', {}, 'Fillie filled what your profile covers. Add a free key (Google Gemini takes about a minute) for the open-ended questions. Nothing extra to pay.'),
+    );
+    const button = el('button', { class: 'btn btn-secondary btn-block', type: 'button', 'data-fillie-action': 'setup-ai' });
+    button.appendChild(text('span', {}, 'Set up AI · it’s free'));
+    button.addEventListener('click', () => this.callbacks.onOpenSettings());
+    box.appendChild(button);
+    foot.appendChild(box);
+  }
+
   /** "Save answers" — teaches Fillie what is on the page right now. */
   private appendSaveAnswers(foot: HTMLElement): void {
     if (!this.callbacks.onSaveAnswers) return;
@@ -1312,6 +1336,7 @@ export class FillieOverlay {
       foot.appendChild(fill);
 
       this.appendSaveAnswers(foot);
+      this.appendAiNudge(foot);
 
       const note = el('div', { class: 'manual-note' });
       note.appendChild(icon('shield', { size: 13 }));
@@ -1327,6 +1352,7 @@ export class FillieOverlay {
       review.addEventListener('click', () => this.callbacks.onFocusField('__all__'));
       foot.appendChild(review);
       this.appendSaveAnswers(foot);
+      this.appendAiNudge(foot);
 
       const note = el('div', { class: 'manual-note' });
       note.appendChild(icon('shield', { size: 13 }));

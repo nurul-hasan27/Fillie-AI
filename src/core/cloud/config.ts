@@ -10,8 +10,8 @@ export const CLOUD = {
   /** Free form-fillings per calendar week before sign-in + payment is required. */
   freeFillsPerWeek: 3,
   priceLabel: '$5 one-time',
-  /** Shown on the Razorpay (UPI / cards / netbanking) button. Match RAZORPAY_AMOUNT_MINOR on the server. */
-  razorpayLabel: '₹420',
+  /** Rupee price (UPI, netbanking, wallets, Indian cards). Match RAZORPAY_INR_AMOUNT_MINOR on the server. */
+  priceInrLabel: '₹449',
   /** How many applications are fetched per page in the Database view. */
   pageSize: 100,
 };

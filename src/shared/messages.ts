@@ -52,6 +52,8 @@ export interface PlanResponse {
   problems?: string[];
   profileCompleteness?: number;
   aiEnabled?: boolean;
+  /** True when at least one AI platform has a key and is switched on. */
+  aiReady?: boolean;
   error?: string;
 }
 
@@ -109,7 +111,7 @@ export interface AccountStatus {
   /** Applications saved on this device, waiting to upload. */
   pendingApplications: number;
   priceLabel: string;
-  razorpayLabel: string;
+  priceInrLabel: string;
   /** Whether the user lets their offers be used, anonymously, as success stories. */
   shareOffers: boolean;
   lastBackupAt?: number;
@@ -174,18 +176,20 @@ export type BackgroundMessage =
   | { type: 'fillie:auth-callback'; url: string }
   | { type: 'fillie:auth-popup'; url: string }
   | { type: 'fillie:sign-out' }
-  | { type: 'fillie:checkout'; provider: 'stripe' | 'razorpay' }
+  | { type: 'fillie:checkout'; currency: 'INR' | 'USD' }
   | { type: 'fillie:feedback'; rating: number | null; kind: 'review' | 'bug' | 'idea'; message: string }
   | { type: 'fillie:set-share-offers'; value: boolean }
   | { type: 'fillie:report-quality'; filled: number; edited: number; device: DeviceHashes }
   | { type: 'fillie:open-account' }
+  | { type: 'fillie:open-app'; hash: string }
   | { type: 'fillie:refresh-payment'; device: DeviceHashes }
   | { type: 'fillie:backup-now' }
   | { type: 'fillie:restore-now' }
   | { type: 'fillie:apps-list'; query: ApplicationsRequest }
   | { type: 'fillie:apps-save'; app: Application }
   | { type: 'fillie:apps-delete'; id: string }
-  | { type: 'fillie:apps-track'; context: ApplicationContext; resumeId?: string }
+  | { type: 'fillie:apps-summary' }
+  | { type: 'fillie:apps-track'; context: ApplicationContext; resumeId?: string; /** The page's readable text and the form's questions, for reading details such as the pay. */ formText?: string }
   | { type: 'fillie:get-memory' }
   | { type: 'fillie:save-memory'; memory: LearnedAnswer[] }
   | { type: 'fillie:report-session'; url: string; stats: SessionStats; aiCalls?: number }

@@ -1,8 +1,14 @@
-// Starts a checkout for the one-time payment, with Stripe (card, $5) or Razorpay (UPI/cards/netbanking, INR).
+// Starts the one-time checkout (or, with quote:true, only prices it) with Razorpay (a payment link): ₹ for UPI/netbanking/wallets/cards, or $ for international cards.
 // Deploy with: supabase functions deploy create-checkout
-// Secrets: SUCCESS_URL, CANCEL_URL, STRIPE_SECRET_KEY,
-//          RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET, RAZORPAY_AMOUNT_MINOR (paise, e.g. 42000), RAZORPAY_CURRENCY (default INR)
+// Secrets: SUCCESS_URL, RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET,
+//          RAZORPAY_AMOUNT_MINOR (USD cents, default 500 = $5), RAZORPAY_INR_AMOUNT_MINOR (paise, default 44900 = ₹449)
 import { corsHeaders, reply } from '../_shared/cors.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { parseCodes, pickPrice, priceOrder, type PricedOrder } from '../_shared/pricing.ts';
+
+const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
+
+interface ResolvedCode { kind: 'promo' | 'offer'; id: string; code: string; discount_bps: number; title: string }
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -15,38 +21,35 @@ Deno.serve(async (req) => {
   if (!userResponse.ok) return reply({ error: 'Sign in first.' }, 401);
   const user = (await userResponse.json()) as { id: string; email?: string };
 
-  const body = (await req.json().catch(() => ({}))) as { provider?: string };
-  if (body.provider === 'razorpay') return razorpay(user);
-  return stripe(user);
+  const body = (await req.json().catch(() => ({}))) as { currency?: string; codes?: unknown; quote?: boolean };
+  const price = pickPrice(body.currency, (name) => Deno.env.get(name));
+
+  // Resolve the codes in the database: it knows who owns a code, whether it is live, and who is buying.
+  const applied: ResolvedCode[] = [];
+  const rejected: Array<{ code: string; reason: string }> = [];
+  for (const code of parseCodes(body.codes)) {
+    const { data, error } = await admin.rpc('checkout_resolve', { p_code: code, p_user: user.id });
+    if (error || !data) {
+      console.error(JSON.stringify({ event: 'checkout_resolve_failed', message: error?.message }));
+      return reply({ error: 'Could not check that code. Please try again.' }, 502);
+    }
+    const result = data as ResolvedCode & { error?: string };
+    if (result.error) rejected.push({ code, reason: result.error });
+    else if (applied.some((a) => a.kind === result.kind)) rejected.push({ code, reason: 'same_kind' });
+    else applied.push(result);
+  }
+  const promo = applied.find((a) => a.kind === 'promo');
+  const offer = applied.find((a) => a.kind === 'offer');
+  const order = priceOrder(price, promo?.discount_bps ?? 0, offer?.discount_bps ?? 0);
+
+  if (body.quote) return reply({ order, applied: applied.map(({ kind, code, discount_bps, title }) => ({ kind, code, discount_bps, title })), rejected });
+  // Never charge a different price than the buyer saw: a code that no longer works stops the payment.
+  const refused = rejected.filter((r) => r.reason !== 'same_kind');
+  if (refused.length) return reply({ error: 'A code you entered can no longer be used. Remove it and try again.', rejected: refused }, 409);
+  return razorpay(user, order, promo, offer);
 });
 
-async function stripe(user: { id: string; email?: string }): Promise<Response> {
-  const form = new URLSearchParams({
-    mode: 'payment',
-    'line_items[0][quantity]': '1',
-    'line_items[0][price_data][currency]': 'usd',
-    'line_items[0][price_data][unit_amount]': '500',
-    'line_items[0][price_data][product_data][name]': 'Fillie: lifetime access',
-    client_reference_id: user.id,
-    success_url: Deno.env.get('SUCCESS_URL')!,
-    cancel_url: Deno.env.get('CANCEL_URL')!,
-  });
-  if (user.email) form.set('customer_email', user.email);
-
-  const stripe = await fetch('https://api.stripe.com/v1/checkout/sessions', {
-    method: 'POST',
-    headers: { Authorization: `Bearer ${Deno.env.get('STRIPE_SECRET_KEY')}`, 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: form,
-  });
-  const session = await stripe.json();
-  if (!stripe.ok || !session.url) {
-    console.error(JSON.stringify({ event: 'checkout_failed', provider: 'stripe', status: stripe.status, code: session?.error?.code, message: session?.error?.message }));
-    return reply({ error: `Stripe: ${session?.error?.message ?? 'could not start checkout.'}` }, 502);
-  }
-  return reply({ url: session.url });
-}
-
-async function razorpay(user: { id: string; email?: string }): Promise<Response> {
+async function razorpay(user: { id: string; email?: string }, order: PricedOrder, promo?: ResolvedCode, offer?: ResolvedCode): Promise<Response> {
   const keyId = Deno.env.get('RAZORPAY_KEY_ID');
   const keySecret = Deno.env.get('RAZORPAY_KEY_SECRET');
   if (!keyId || !keySecret) {
@@ -58,13 +61,21 @@ async function razorpay(user: { id: string; email?: string }): Promise<Response>
     method: 'POST',
     headers: { Authorization: `Basic ${btoa(`${keyId}:${keySecret}`)}`, 'Content-Type': 'application/json' },
     body: JSON.stringify({
-      amount: Number(Deno.env.get('RAZORPAY_AMOUNT_MINOR') ?? '42000'),
-      currency: Deno.env.get('RAZORPAY_CURRENCY') ?? 'INR',
+      amount: order.finalMinor,
+      currency: order.currency,
       description: 'Fillie: lifetime access',
       reference_id: `${user.id.slice(0, 8)}-${Date.now()}`,
       customer: user.email ? { email: user.email } : undefined,
       notify: { email: false, sms: false },
-      notes: { user_id: user.id },
+      // Our own record of how the price was made up; the payment recorder reads it back from Razorpay.
+      notes: {
+        user_id: user.id,
+        ...(promo ? { promo_id: promo.id } : {}),
+        ...(offer ? { offer_id: offer.id } : {}),
+        list_minor: String(order.listMinor),
+        promo_off: String(order.promoOffMinor),
+        offer_off: String(order.offerOffMinor),
+      },
       callback_url: Deno.env.get('SUCCESS_URL')!,
       callback_method: 'get',
     }),

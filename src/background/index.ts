@@ -20,7 +20,7 @@ import { ApplicationStore } from '../core/cloud/applications';
 import { BackupService } from '../core/cloud/backup';
 import { CLOUD, isCloudConfigured } from '../core/cloud/config';
 import type { DeviceSignals, OAuthProvider } from '../core/cloud/types';
-import { suggestIntel } from '../core/engine/intel';
+import { extractDetails } from '../core/engine/intel';
 import { createAuthWindow, type WindowsApi } from './popup-window';
 import { createProvider } from '../core/ai/factory';
 import { buildProviderChain, FailoverProvider } from '../core/ai/chain';
@@ -236,6 +236,7 @@ async function handlePlan(payload: PlanRequest): Promise<PlanResponse> {
       switchedFrom: [...switchedFrom],
       profileCompleteness: profileCompletion(profile),
       aiEnabled: settings.enabled && settings.config.provider !== 'offline',
+      aiReady: isAiUsable(settings),
     };
   } catch (error) {
     return {
@@ -476,6 +477,20 @@ const applications = new ApplicationStore(storage, cloud);
 const backups = new BackupService(storage, cloud);
 
 const INSTALL_KEY = 'fillie:install-id';
+/** Bumped whenever something the popup displays may have changed (see the popup's cache). */
+const POPUP_DIRTY_KEY = 'fillie:popup-dirty';
+const POPUP_DIRTYING = new Set([
+  'fillie:apps-save',
+  'fillie:apps-delete',
+  'fillie:apps-track',
+  'fillie:save-settings',
+  'fillie:save-profile',
+  'fillie:sign-in',
+  'fillie:sign-in-oauth',
+  'fillie:sign-out',
+  'fillie:refresh-payment',
+  'fillie:restore-now',
+]);
 const BACKUP_AT_KEY = 'fillie:last-backup';
 
 async function deviceSignals(hashes: DeviceHashes): Promise<DeviceSignals> {
@@ -493,7 +508,7 @@ async function handleAccountStatus(device: DeviceHashes): Promise<AccountStatus>
     access: await access.status(await deviceSignals(device)),
     pendingApplications: await applications.pendingCount(),
     priceLabel: CLOUD.priceLabel,
-    razorpayLabel: CLOUD.razorpayLabel,
+    priceInrLabel: CLOUD.priceInrLabel,
     shareOffers: await readShareOffers(),
     lastBackupAt: await storage.read<number>(BACKUP_AT_KEY),
   };
@@ -612,9 +627,9 @@ async function handleOAuth(provider: OAuthProvider) {
   }
 }
 
-async function handleCheckout(provider: 'stripe' | 'razorpay') {
+async function handleCheckout(currency: 'INR' | 'USD') {
   try {
-    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: JSON.stringify({ provider }) });
+    const { url } = await cloud.json<{ url: string }>('/functions/v1/create-checkout', { method: 'POST', body: JSON.stringify({ currency }) });
     await (globalThis as { chrome?: typeof chrome }).chrome?.tabs?.create({ url });
     return { ok: true, url };
   } catch (error) {
@@ -644,18 +659,28 @@ async function handleRestoreNow() {
  * AI platform is configured, a short AI summary; a rating is only an AI guess
  * and stays editable.
  */
-async function handleTrack(context: ApplicationContext, resumeId?: string) {
-  const company = context.company?.trim() || context.host;
+async function handleTrack(context: ApplicationContext, resumeId?: string, formText = '') {
   const resumeName = await storage.getResumeName(resumeId);
-  // When the role cannot be read, the resume used is shown in its place.
-  const role = context.role?.trim() || (resumeName ? '' : context.pageTitle.slice(0, 120) || 'Application');
   const settings = await getSettings();
   const deps = await plannerDeps(settings);
+  const heuristicCompany = context.company?.trim() || context.host;
+  const heuristicRole = context.role?.trim() || '';
+  const base = { company: heuristicCompany, role: heuristicRole, url: context.url, host: context.host, resumeName };
+
   const { app, created } = await applications.track(
-    { company, role, url: context.url, host: context.host, resumeName },
+    base,
     async () => {
-      const intel = await suggestIntel(context, deps.send);
-      return { notes: intel.notes, rating: intel.rating, ratingSource: intel.rating ? 'ai' : null };
+      // The whole form goes to the model once, to read the details of this application.
+      const details = await extractDetails(context, formText, deps.send);
+      return {
+        company: details.company || heuristicCompany,
+        // When the role cannot be read, the resume used is shown in its place.
+        role: details.role || heuristicRole || (resumeName ? '' : context.pageTitle.slice(0, 120) || 'Application'),
+        offeredCtc: details.ctc,
+        notes: details.notes,
+        rating: details.rating,
+        ratingSource: details.rating ? ('ai' as const) : null,
+      };
     },
   );
   return { ok: true, created, app };
@@ -801,13 +826,19 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
       await cloud.signOut();
       return { ok: true };
     case 'fillie:checkout':
-      return handleCheckout(message.provider);
+      return handleCheckout(message.currency);
     case 'fillie:feedback':
       return handleFeedback(message);
     case 'fillie:set-share-offers':
       return handleShareOffers(message.value);
     case 'fillie:report-quality':
       return handleQuality(message.filled, message.edited, await deviceSignals(message.device));
+    case 'fillie:open-app': {
+      const api = (globalThis as { chrome?: typeof chrome }).chrome;
+      const hash = /^#\/[a-z0-9/_-]*$/i.test(message.hash) ? message.hash : '';
+      await api?.tabs?.create({ url: api.runtime.getURL(`pages/app.html${hash}`) });
+      return { ok: true };
+    }
     case 'fillie:open-account': {
       const api = (globalThis as { chrome?: typeof chrome }).chrome;
       await api?.tabs?.create({ url: api.runtime.getURL('pages/app.html#/account') });
@@ -831,11 +862,13 @@ async function dispatch(message: BackgroundMessage, sender?: chrome.runtime.Mess
       return applications.list(message.query satisfies ApplicationsRequest);
     case 'fillie:apps-save':
       return applications.save(message.app);
+    case 'fillie:apps-summary':
+      return applications.summary();
     case 'fillie:apps-delete':
       await applications.remove(message.id);
       return { ok: true };
     case 'fillie:apps-track':
-      return handleTrack(message.context, message.resumeId);
+      return handleTrack(message.context, message.resumeId, message.formText);
     case 'fillie:get-memory':
       return storage.getMemory();
     case 'fillie:save-memory':
@@ -860,7 +893,11 @@ if (runtime?.onMessage) {
   runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message || typeof message.type !== 'string' || !message.type.startsWith('fillie:')) return false;
     dispatch(message as BackgroundMessage, _sender)
-      .then((result) => sendResponse(result))
+      .then(async (result) => {
+        // The popup shows cached numbers; anything that could change them marks the cache stale.
+        if (POPUP_DIRTYING.has(message.type)) await storage.put(POPUP_DIRTY_KEY, Date.now()).catch(() => undefined);
+        sendResponse(result);
+      })
       .catch((error: unknown) => {
         // Never leak a stack trace or an API key to the caller.
         const safe = error instanceof AIError ? error.message : 'Something went wrong inside Fillie.';

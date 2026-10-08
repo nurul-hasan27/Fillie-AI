@@ -353,7 +353,6 @@ export const PROFILE_SECTIONS: Array<{
   { id: 'projects', label: 'Projects', description: 'Work you have shipped.' },
   { id: 'achievements', label: 'Achievements', description: 'Awards, hackathons, certificates.' },
   { id: 'links', label: 'Links', description: 'Where people can find you.' },
-  { id: 'documents', label: 'Documents', description: 'Resume, certificates and files tagged with keywords.' },
   { id: 'preferences', label: 'Preferences', description: 'Relocation, work mode, availability.' },
 ];
 

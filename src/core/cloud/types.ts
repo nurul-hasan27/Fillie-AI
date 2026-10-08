@@ -38,6 +38,8 @@ export interface Application {
   host: string;
   /** Name of the resume used to fill the form; shown when the role could not be read. */
   resumeName: string;
+  /** Pay stated in the posting, copied as written (e.g. "8-12 LPA"). Empty when the posting does not say. */
+  offeredCtc: string;
   updatedAt: number;
 }
 

@@ -7,6 +7,7 @@ import { afterEach, beforeEach } from 'vitest';
  */
 
 beforeEach(() => {
+  if (typeof Element === 'undefined') return; // node-only suites (database tests) have no DOM
   Object.defineProperty(Element.prototype, 'getClientRects', {
     configurable: true,
     writable: true,
@@ -57,6 +58,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  if (typeof document === 'undefined') return;
   document.body.innerHTML = '';
   document.documentElement.removeAttribute('data-theme');
 });

@@ -52,16 +52,41 @@ export interface ContextInput {
   fieldLabels?: string[];
 }
 
-function firstMatch(text: string, patterns: Array<{ pattern: RegExp; group: number }>): string | undefined {
+function firstMatch(
+  text: string,
+  patterns: Array<{ pattern: RegExp; group: number }>,
+  accept: (value: string) => boolean = () => true,
+): string | undefined {
   for (const { pattern, group } of patterns) {
     const match = pattern.exec(text);
     const value = match?.[group];
     if (value) {
       const cleaned = normalizeText(value).replace(/\s*[(\[{].*$/, '');
-      if (cleaned.length >= 2 && cleaned.length <= 80) return cleaned;
+      if (cleaned.length >= 2 && cleaned.length <= 80 && accept(cleaned)) return cleaned;
     }
   }
   return undefined;
+}
+
+/** A job title is short and is not a sentence ("You will build distributed services…" is not one). */
+export function looksLikeJobTitle(value: string): boolean {
+  const words = value.trim().split(/\s+/);
+  if (words.length < 1 || words.length > 9 || value.length > 70) return false;
+  if (/[.!?]\s|[.!?]$/.test(value)) return false;
+  return !/^(you|we|our|the|this|about|as a|in this|join)\b/i.test(value);
+}
+
+/**
+ * Pages usually title themselves "Platform Engineer at Initech — Apply" or "… | Careers".
+ * That is the most reliable place to read the role and the company from.
+ */
+export function splitTitle(title: string): { role: string; company: string } | undefined {
+  const cleaned = normalizeText(title).replace(/\s*[|\-–—]\s*(careers?|jobs?|job openings?|apply(?: now)?|application|hiring)\b.*$/i, '');
+  const match = /^(.{3,70}?)\s+(?:at|@)\s+([^|\-–—]{2,60})$/i.exec(cleaned);
+  if (!match) return undefined;
+  const role = normalizeText(match[1]);
+  const company = normalizeText(match[2]);
+  return looksLikeJobTitle(role) ? { role, company } : undefined;
 }
 
 /** Pulls the most likely job description block out of the page text. */
@@ -85,9 +110,13 @@ export function extractApplicationContext(input: ContextInput): ApplicationConte
   const labelText = (input.fieldLabels ?? []).join('\n');
   const haystack = `${input.pageTitle}\n${headingText}\n${input.pageText.slice(0, 4000)}\n${labelText.slice(0, 1200)}`;
 
-  const role = firstMatch(haystack, ROLE_PATTERNS) ?? guessRoleFromTitle(input.pageTitle) ?? guessRoleFromLabels(input.fieldLabels ?? []);
-  const company =
-    firstMatch(haystack, COMPANY_PATTERNS) ?? guessCompanyFromHost(input.url) ?? undefined;
+  const fromTitle = splitTitle(input.pageTitle);
+  const role =
+    fromTitle?.role ??
+    firstMatch(haystack, ROLE_PATTERNS, looksLikeJobTitle) ??
+    guessRoleFromTitle(input.pageTitle) ??
+    guessRoleFromLabels(input.fieldLabels ?? []);
+  const company = fromTitle?.company ?? firstMatch(haystack, COMPANY_PATTERNS) ?? guessCompanyFromHost(input.url) ?? undefined;
   const location = firstMatch(haystack, LOCATION_PATTERNS);
   const departmentMatch = DEPARTMENT_PATTERN.exec(haystack);
   const department = departmentMatch?.[1] ? normalizeText(departmentMatch[1]).slice(0, 60) : undefined;

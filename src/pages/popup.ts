@@ -4,7 +4,7 @@ import { sendMessage, type ContentPingResponse } from '../shared/messages';
 import { escapeHtml, html, preferredTheme, setTheme, type TemplateResult } from '../ui/dom';
 import { icon } from '../ui/icons';
 import { VERSION } from '../shared/version';
-import { formatRelativeTime } from '../core/text';
+import type { TrackerSummary } from '../core/cloud/applications';
 import { PROVIDER_PRESETS } from '../core/ai/presets';
 
 /**
@@ -13,6 +13,50 @@ import { PROVIDER_PRESETS } from '../core/ai/presets';
  */
 
 const app = document.getElementById('app')!;
+
+const CROWN = html`<svg class="pop-crown" viewBox="0 0 24 24" width="12" height="12" aria-hidden="true"><path fill="currentColor" d="M3 8l4.6 4.2L12 5l4.4 7.2L21 8l-2 10.5H5L3 8zm2 12h14v1.5H5V20z" /></svg>`;
+
+/**
+ * The popup opens with the last numbers it saw, so nothing flashes or counts up, then
+ * checks quietly in the background. A cached copy is trusted for a minute unless the
+ * background says something changed (an application was saved, AI keys were edited, ...).
+ */
+const CACHE_KEY = 'fillie:popup-cache';
+const DIRTY_KEY = 'fillie:popup-dirty';
+const FRESH_MS = 60_000;
+
+interface PopupData {
+  status: StatusResponse;
+  summary: TrackerSummary;
+  at: number;
+}
+
+async function readCache(): Promise<{ data?: PopupData; fresh: boolean }> {
+  try {
+    const stored = await chrome.storage.local.get([CACHE_KEY, DIRTY_KEY]);
+    const data = stored[CACHE_KEY] as PopupData | undefined;
+    if (!data) return { fresh: false };
+    const dirtyAt = Number(stored[DIRTY_KEY] ?? 0);
+    return { data, fresh: Date.now() - data.at < FRESH_MS && dirtyAt <= data.at };
+  } catch {
+    return { fresh: false };
+  }
+}
+
+async function loadFresh(): Promise<PopupData> {
+  const [status, summary] = await Promise.all([
+    loadStatus(),
+    sendMessage<TrackerSummary>({ type: 'fillie:apps-summary' }).catch(
+      () => ({ total: 0, counts: { applied: 0, interview: 0, offer: 0, rejected: 0 }, upcoming: [], localOnly: true }) as TrackerSummary,
+    ),
+  ]);
+  const data = { status, summary, at: Date.now() };
+  void chrome.storage.local.set({ [CACHE_KEY]: data }).catch(() => undefined);
+  return data;
+}
+
+/** What is on screen, so an unchanged refresh repaints nothing. */
+let shown = '';
 
 interface TabInfo {
   id?: number;
@@ -26,6 +70,7 @@ function render(state: {
   tab?: TabInfo;
   busy?: boolean;
   message?: string;
+  summary?: TrackerSummary;
 }): TemplateResult {
   const status = state.status;
   const provider = PROVIDER_PRESETS.find((preset) => preset.id === (status?.provider ?? 'groq'));
@@ -37,25 +82,30 @@ function render(state: {
       ? html`
           <button class="pop-user" data-action="open-account" type="button" title="${escapeHtml(email)}">
             <span class="pop-avatar" aria-hidden="true">${escapeHtml(email.charAt(0).toUpperCase())}</span>
-            <span class="pop-user-text">
-              <strong>${escapeHtml(email)}</strong>
-              <span>${access.plan === 'paid' ? 'Unlocked' : `${access.remaining} free left this week`}</span>
-            </span>
+            <span class="pop-user-email">${escapeHtml(email)}</span>
           </button>
         `
       : html`<button class="pop-signin" data-action="open-account" type="button">Sign in</button>`
     : '';
+  // Premium is a quiet mark; everyone else sees a small way to get it.
+  const premium = access
+    ? access.plan === 'paid'
+      ? html`<span class="pop-premium" title="You have unlimited access">${CROWN}Premium</span>`
+      : html`<button class="pop-getpremium" data-action="open-account" type="button">Get premium</button>`
+    : '';
 
   const header = html`
-    <header class="pop-head">
+    <header class="pop-head rise" style="--i:0">
       <div class="pop-brand">
         <span class="pop-mark" aria-hidden="true"></span>
         <strong class="pop-name">Fillie</strong>
       </div>
-      ${account}
-      <button class="ff-btn ff-btn-ghost ff-btn-icon ff-btn-sm" data-action="open-app" type="button" aria-label="Open Fillie" title="Open Fillie">
-        <span data-icon="external"></span>
-      </button>
+      <div class="pop-head-right">
+        ${account}${premium}
+        <button class="pop-ext" data-action="open-app" type="button" aria-label="Open Fillie" title="Open Fillie">
+          <span data-icon="external" data-size="14"></span>
+        </button>
+      </div>
     </header>
   `;
 
@@ -110,78 +160,114 @@ function render(state: {
     `;
   }
 
-  const stats = status.lastSession?.stats;
   const pageName = pageTitle(state.tab?.url);
+  const summary = state.summary;
+  const counts = summary?.counts ?? { applied: 0, interview: 0, offer: 0, rejected: 0 };
+  const pipeline: Array<[keyof typeof counts, string]> = [
+    ['applied', 'Applied'],
+    ['interview', 'Interview'],
+    ['offer', 'Offer'],
+    ['rejected', 'Rejected'],
+  ];
+  const aiLine = `Ready · ${escapeHtml(provider?.label ?? 'AI')}`;
 
   return html`
     ${header}
     <div class="pop-body">
-      <div class="pop-status">
-        <span class="ff-status ${status.aiConfigured ? 'ff-status--filled' : 'ff-status--attention'}">
-          <span class="ff-status-dot"></span>
-          ${status.aiConfigured ? `Ready · ${escapeHtml(provider?.label ?? 'AI')}` : 'Profile only'}
-        </span>
-        <span class="ff-meta">${status.profileCompleteness}% profile</span>
-      </div>
+      <section class="pop-summary rise" style="--i:1" aria-label="Your applications">
+        <div class="pop-hero-top">
+          <div class="pop-total">
+            ${summary
+              ? html`<b>${summary.total}</b>`
+              : html`<b class="skeleton" aria-hidden="true">00</b>`}
+            <span>${summary?.total === 1 ? 'form filled' : 'forms filled'}</span>
+          </div>
+          <button class="pop-viewall" data-action="open-database" type="button">
+            View all <span data-icon="arrow-right" data-size="14"></span>
+          </button>
+        </div>
+        <div class="pop-pipeline" role="list">
+          ${pipeline.map(
+            ([key, label], index) => html`
+              <button class="pop-chip pop-chip-${key}" style="--j:${index}" data-action="open-database" type="button" role="listitem">
+                <b>${summary ? counts[key] : '–'}</b><span>${label}</span>
+              </button>
+            `,
+          )}
+        </div>
+        ${summary?.localOnly && summary.total > 0
+          ? html`<p class="pop-local">Saved on this device. <button class="pop-link" data-action="open-account" type="button">Sign in to back up</button></p>`
+          : ''}
+      </section>
 
-      <button class="pop-cta" data-action="run" type="button" ${state.pageOk ? '' : 'disabled'}>
+      <section class="pop-upcoming rise" style="--i:2" aria-label="Upcoming interviews">
+        <div class="pop-section-head">
+          <h2>Upcoming interviews</h2>
+          ${summary && summary.upcoming.length ? html`<span class="pop-count">${summary.upcoming.length}</span>` : ''}
+        </div>
+        ${!summary
+          ? html`<div class="pop-skel-list"><i class="skeleton"></i><i class="skeleton"></i></div>`
+          : summary.upcoming.length === 0
+            ? html`<p class="pop-empty">No interviews scheduled. When you set one in the Database, it shows up here.</p>`
+            : html`<ol class="pop-interviews" data-scroll="${String(summary.upcoming.length > 2)}">${summary.upcoming.map((item, index) => interviewRow(item, index))}</ol>`}
+      </section>
+
+      <button class="pop-cta rise" style="--i:3" data-action="run" type="button" ${state.pageOk ? '' : 'disabled'}>
         <span class="pop-cta-icon" data-icon="sparkle"></span>
         <span class="pop-cta-body">
-          <strong>${state.pageOk ? 'Fill this page' : 'No form here yet'}</strong>
+          <strong>${state.pageOk ? 'Fill this page' : 'No form on this page'}</strong>
           <span class="ff-meta">${state.pageOk ? escapeHtml(pageName) : 'Open a form, then come back'}</span>
         </span>
         <span class="pop-cta-go" data-icon="arrow-right"></span>
       </button>
 
-      <div style="display:flex; justify-content:center; margin-top:-4px; margin-bottom:var(--ff-space-2);">
-        <span class="ff-meta" style="font-size:11px;">Shortcut: <kbd style="background:var(--surface-2); padding:1px 5px; border-radius:4px; border:1px solid var(--border); font-family:inherit;">⌥⇧F</kbd> / <kbd style="background:var(--surface-2); padding:1px 5px; border-radius:4px; border:1px solid var(--border); font-family:inherit;">Alt+Shift+F</kbd></span>
-      </div>
-
-      ${
-        stats
+      <footer class="pop-foot rise" style="--i:4">
+        ${status.aiConfigured
           ? html`
-              <section class="pop-section">
-                <div class="ff-row-between">
-                  <span class="ff-label">Last run</span>
-                  <span class="ff-meta">${escapeHtml(formatRelativeTime(status.lastSession!.at))}</span>
-                </div>
-                <div class="pop-metrics">
-                  <div><b>${stats.total}</b><span>questions</span></div>
-                  <div><b>${stats.verified || stats.filledFromProfile + stats.filledFromMemory + stats.generated}</b><span>filled</span></div>
-                  <div>
-                    <b class="${stats.needsAttention ? 'is-warning' : ''}">${stats.needsAttention}</b>
-                    <span>needed you</span>
-                  </div>
-                </div>
-              </section>
-            `
+              <span class="pop-dot" data-ok="true"></span>
+              <span>${aiLine}</span>
+              <button class="pop-link pop-gear" data-action="open-settings" type="button" aria-label="Settings"><span data-icon="sliders" data-size="12"></span></button>`
           : html`
-              <section class="pop-section">
-                <span class="ff-label">Quick actions</span>
-                <div class="pop-actions">
-                  <button class="ff-btn ff-btn-secondary ff-btn-sm" data-action="open-profile" type="button">
-                    <span data-icon="user"></span> Profile
-                  </button>
-                  <button class="ff-btn ff-btn-secondary ff-btn-sm" data-action="open-database" type="button">
-                    <span data-icon="layers"></span> Database
-                  </button>
-                  <button class="ff-btn ff-btn-secondary ff-btn-sm" data-action="open-memory" type="button">
-                    <span data-icon="brain"></span> Memory
-                    ${status.memoryCount ? html`<span class="ff-chip">${status.memoryCount}</span>` : ''}
-                  </button>
-                  <button class="ff-btn ff-btn-secondary ff-btn-sm" data-action="open-settings" type="button">
-                    <span data-icon="sliders"></span> Settings
-                  </button>
-                </div>
-              </section>
-            `
-      }
-
-      <p class="pop-foot-note">
-        <span data-icon="shield"></span>
-        Fillie never submits anything. You always press the final button.
-      </p>
+              <button class="pop-setup-ai" data-action="open-ai-setup" type="button" title="Add a free key from Google Gemini, Cerebras or OpenRouter. It costs nothing extra.">
+                <span data-icon="sparkle" data-size="12"></span> Set up AI · it's free
+              </button>`}
+        <span class="pop-sep">·</span>
+        <span class="pop-keys" title="Run Fillie on the current page">⌥⇧F</span>
+      </footer>
     </div>
+  `;
+}
+
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/** "Today", "Tomorrow" or "in 3 days" for a scheduled time. */
+export function whenLabel(when: Date, now = new Date()): string {
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const days = Math.round((startOfDay(when) - startOfDay(now)) / 86_400_000);
+  if (days <= 0) return 'Today';
+  if (days === 1) return 'Tomorrow';
+  return `in ${days} days`;
+}
+
+function interviewRow(item: TrackerSummary['upcoming'][number], index: number): TemplateResult {
+  const when = new Date(item.interviewAt);
+  const time = when.toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' });
+  const weekday = when.toLocaleDateString(undefined, { weekday: 'short' });
+  const label = whenLabel(when);
+  return html`
+    <li class="pop-interview" style="--k:${index}" data-soon="${label === 'Today' || label === 'Tomorrow'}">
+      <time class="pop-date" datetime="${escapeHtml(item.interviewAt)}">
+        <span>${MONTHS[when.getMonth()]}</span><b>${when.getDate()}</b>
+      </time>
+      <div class="pop-interview-main">
+        <strong>${escapeHtml(item.company)}</strong>
+        <span>${item.role ? escapeHtml(item.role) : item.resumeName ? html`<em>(${escapeHtml(item.resumeName)})</em>` : 'Role not found'}</span>
+      </div>
+      <div class="pop-interview-when">
+        <span class="pop-when">${label}</span>
+        <span>${weekday} · ${time}</span>
+      </div>
+    </li>
   `;
 }
 
@@ -203,7 +289,9 @@ function hydrate(root: ParentNode = document): void {
   });
 }
 
-function paint(next: Parameters<typeof render>[0]): void {
+function paint(next: Parameters<typeof render>[0], phase: 'enter' | 'settled' = 'settled'): void {
+  // "enter": the popup eases in once. "settled": later updates swap content without any motion.
+  app.dataset.phase = phase;
   const result = render(next);
   app.innerHTML = result.__html;
   hydrate(app);
@@ -263,9 +351,29 @@ async function openApp(path = ''): Promise<void> {
 
 async function init(): Promise<void> {
   setTheme(preferredTheme());
-  const [status, tab] = await Promise.all([loadStatus(), activeTab()]);
+  const [cached, tab] = await Promise.all([readCache(), activeTab()]);
   const pageOk = await isFormPage(tab);
-  paint({ status, pageOk, tab });
+
+  if (cached.data) {
+    // Final numbers, immediately. Nothing counts up and nothing flashes.
+    paint({ status: cached.data.status, summary: cached.data.summary, pageOk, tab }, 'enter');
+    shown = JSON.stringify([cached.data.status, cached.data.summary]);
+    if (cached.fresh) return;
+    const fresh = await loadFresh();
+    const key = JSON.stringify([fresh.status, fresh.summary]);
+    if (key !== shown) {
+      shown = key;
+      paint({ status: fresh.status, summary: fresh.summary, pageOk, tab }, 'settled');
+    }
+    return;
+  }
+
+  // First ever open: placeholders, then the numbers.
+  const status = await loadStatus();
+  paint({ status, pageOk, tab }, 'enter');
+  const fresh = await loadFresh();
+  shown = JSON.stringify([fresh.status, fresh.summary]);
+  paint({ status: fresh.status, summary: fresh.summary, pageOk, tab }, 'settled');
 }
 
 app.addEventListener('click', async (event) => {
@@ -278,6 +386,7 @@ app.addEventListener('click', async (event) => {
   if (action === 'open-database') return void openApp('#/database');
   if (action === 'open-account') return void openApp('#/account');
   if (action === 'open-settings') return void openApp('#/settings/ai');
+  if (action === 'open-ai-setup') return void openApp('#/settings/ai');
   if (action === 'run') {
     const tab = await activeTab();
     if (tab?.id !== undefined) return void runOnPage(tab.id);

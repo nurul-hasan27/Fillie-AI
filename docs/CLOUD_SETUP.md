@@ -1,19 +1,19 @@
 # Cloud setup (all free tiers)
 
-Fillie's accounts, application database, backup, free-trial counter, payments and admin dashboard run on **Supabase** (free plan), with **Stripe** (cards, $5) and **Razorpay** (UPI, cards, netbanking, INR) for the one-time payment. Neither charges a monthly fee, only a small fee per payment. No other server is needed.
+Fillie's accounts, application database, backup, free-trial counter, payments and admin dashboard run on **Supabase** (free plan), with **Razorpay** for the one-time $5 payment. Razorpay charges no monthly fee, only a small fee per payment. No other server is needed.
 
 | Piece | Where it lives |
 | --- | --- |
 | Sign-in (email, Google, GitHub, Apple) | Supabase Auth |
 | Applications, backups, licences | Supabase Postgres, protected by row-level security |
 | Free-trial counter (3 per week, per device) | Supabase Edge Function `trial` |
-| One-time payment | `create-checkout` starts Stripe or Razorpay checkout; `stripe-webhook` / `razorpay-webhook` unlock the user and record the payment |
+| One-time payment | `create-checkout` starts a $5 Razorpay checkout; `razorpay-webhook` and `confirm-payment` unlock the user and record the payment |
 | Admin dashboard | SQL functions in `0002_*.sql`, readable only by your verified Google account (see the website repo's `/admin`) |
 
 ## 1. Supabase project
 
 1. Create a project at supabase.com (free plan).
-2. **SQL editor**: run `supabase/migrations/0001_init.sql`, then `0002_payments_feedback_admin.sql`, then `0003_table_grants.sql` (without it the API roles have no table privileges and every request fails with `42501 permission denied`).
+2. **SQL editor**: run `supabase/migrations/0001_init.sql`, then `0002_payments_feedback_admin.sql`, then `0003_table_grants.sql`, then `0004_offered_ctc.sql`, then the influencer programme `0005_influencers.sql`, `0006_influencer_api.sql` and `0007_influencer_admin.sql` (see [INFLUENCERS.md](INFLUENCERS.md)) (without the grants the API roles have no table privileges and every request fails with `42501 permission denied`).
 3. **Authentication → Providers**: enable Email, Google, GitHub and (optionally) Apple.
    - Google/GitHub: create an OAuth app in each console and paste the client id and secret.
    - Apple: needs your Apple Developer account (Services ID, key and team ID, entered in Supabase's Apple provider form).
@@ -28,27 +28,19 @@ Install the Supabase CLI, then from the repo root:
 supabase login
 supabase link --project-ref <your-project-ref>
 supabase secrets set TRIAL_SALT=$(openssl rand -hex 16)
-supabase secrets set STRIPE_SECRET_KEY=sk_live_... STRIPE_WEBHOOK_SECRET=whsec_...
-supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=42000
+supabase secrets set RAZORPAY_KEY_ID=rzp_live_... RAZORPAY_KEY_SECRET=... RAZORPAY_WEBHOOK_SECRET=... RAZORPAY_AMOUNT_MINOR=500 RAZORPAY_INR_AMOUNT_MINOR=44900
 supabase secrets set SUCCESS_URL=https://your-site.com/thanks CANCEL_URL=https://your-site.com
 supabase functions deploy trial
 supabase functions deploy create-checkout
-supabase functions deploy stripe-webhook --no-verify-jwt
 supabase functions deploy razorpay-webhook --no-verify-jwt
 ```
 
-## 3. Stripe
-
-1. Create a Stripe account (no monthly fee).
-2. **Developers → Webhooks → Add endpoint**: `https://<project-ref>.supabase.co/functions/v1/stripe-webhook`, event `checkout.session.completed`. Copy its signing secret into `STRIPE_WEBHOOK_SECRET`.
-3. Test with Stripe's test keys and card `4242 4242 4242 4242` first, then switch to live keys.
-
-## 3b. Razorpay
+## 3. Razorpay
 
 1. Create a Razorpay account and finish KYC (needed for live payments).
 2. **Settings → API Keys**: generate a key; put the id and secret in the secrets above.
 3. **Settings → Webhooks → Add**: URL `https://<project-ref>.supabase.co/functions/v1/razorpay-webhook`, a secret you choose (= `RAZORPAY_WEBHOOK_SECRET`), event **payment_link.paid**.
-4. Make `RAZORPAY_AMOUNT_MINOR` (paise) match `razorpayLabel` in `src/core/cloud/config.ts` (42000 paise = ₹420).
+4. Two prices are offered and the buyer picks one: **₹449** (`RAZORPAY_INR_AMOUNT_MINOR=44900`, paise) unlocks UPI, netbanking, wallets and Indian cards, and **$5** (`RAZORPAY_AMOUNT_MINOR=500`, cents) is for international cards. Razorpay only offers UPI/netbanking/wallets on rupee payments. USD links need **International Payments** switched on in Razorpay. Keep `priceLabel` and `priceInrLabel` in `src/core/cloud/config.ts` (and `price`, `priceInr` in the website's `config.ts`) in step with the server amounts.
 
 ## 4. Keep the free database awake
 

@@ -641,9 +641,8 @@ test.describe('popup', () => {
     await popup.reload();
     await popup.waitForSelector('.pop-cta', { timeout: 20_000 });
 
-    // Status is real, and the "never submits" promise is visible up front.
+    // The action is offered for the open page.
     await expect(popup.locator('.pop-cta')).toContainText('Fill this page');
-    await expect(popup.locator('.pop-foot-note')).toContainText(/never submits/i);
 
     await popup.locator('[data-action="run"]').click({ force: true });
     // The form is filled and verified…
@@ -662,7 +661,7 @@ test.describe('popup', () => {
     // The popup tab itself is the active tab here, and Fillie correctly refuses
     // to act on an extension page.
     await expect(popup.locator('.pop-cta')).toBeDisabled();
-    await expect(popup.locator('.pop-cta')).toContainText('No form here yet');
+    await expect(popup.locator('.pop-cta')).toContainText('No form on this page');
   });
 
   test('offers profile setup when there is no profile yet', async ({ fillie }) => {

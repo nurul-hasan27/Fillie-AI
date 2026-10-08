@@ -543,161 +543,6 @@ export function makeSchool(): EducationSchoolItem {
 
 /* ------------------------------------------------------------------ */
 
-export function documentsView(profile: UserProfile): TemplateResult {
-  const docs = profile.documents ?? [];
-  return html`
-    ${sectionIntro(
-      'Documents & Resumes',
-      'Upload your resumes, cover letters, transcripts and other documents with custom keywords. Fillie automatically attaches the matching document when forms ask for file uploads.',
-    )}
-    ${card(
-      'Upload new document',
-      html`
-        <div style="display:flex; flex-direction:column; gap:var(--ff-space-3);">
-          <div class="grid-2">
-            <div>
-              <label class="ff-field" for="doc-upload-file">
-                <span class="ff-label">Document file (PDF, DOCX, TXT, etc.)</span>
-                <input
-                  class="ff-input"
-                  id="doc-upload-file"
-                  type="file"
-                  accept=".pdf,.doc,.docx,.txt,.rtf,.png,.jpg,.jpeg,application/pdf,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
-                />
-              </label>
-            </div>
-            <div>
-              <label class="ff-field" for="doc-upload-category">
-                <span class="ff-label">Document category</span>
-                <select class="ff-input" id="doc-upload-category">
-                  <option value="resume">Resume / CV</option>
-                  <option value="cover-letter">Cover Letter</option>
-                  <option value="transcript">Academic Transcript</option>
-                  <option value="certificate">Certificate</option>
-                  <option value="id">ID Proof</option>
-                  <option value="other">Other Document</option>
-                </select>
-              </label>
-            </div>
-          </div>
-          <div class="grid-2">
-            <div>
-              <label class="ff-field" for="doc-upload-name">
-                <span class="ff-label">Document label / title</span>
-                <input class="ff-input" id="doc-upload-name" placeholder="e.g. SDE Resume 2026, Frontend CV" />
-                <span class="ff-hint">A friendly name to identify this document.</span>
-              </label>
-            </div>
-            <div>
-              <label class="ff-field" for="doc-upload-keywords">
-                <span class="ff-label">Matching keywords (comma-separated)</span>
-                <input class="ff-input" id="doc-upload-keywords" placeholder="e.g. resume, cv, frontend, react, sde" />
-                <span class="ff-hint">When a job form has these words, Fillie picks this document.</span>
-              </label>
-            </div>
-          </div>
-          <div style="margin-top:var(--ff-space-2);">
-            <button class="ff-btn ff-btn-primary" data-action="upload-document-btn" type="button">
-              <span data-icon="upload" data-size="14"></span> Upload Document
-            </button>
-          </div>
-        </div>
-      `,
-    )}
-    ${card(
-      'Document library',
-      html`
-        ${docs.length === 0
-          ? emptyState({
-              title: 'No documents uploaded yet',
-              body: 'Upload your resume or other documents above. Add keywords so Fillie knows which document to attach for each job application form.',
-            })
-          : html`
-              <div class="repeater" data-repeater="documents">
-                ${docs.map((doc, index) => documentItem(doc, index))}
-              </div>
-            `}
-      `,
-    )}
-  `;
-}
-
-function documentItem(doc: DocumentItem, index: number): TemplateResult {
-  const sizeFormatted = doc.fileSize ? `${Math.round(doc.fileSize / 1024)} KB` : '';
-  const categoryLabel: Record<string, string> = {
-    resume: 'Resume / CV',
-    'cover-letter': 'Cover Letter',
-    transcript: 'Transcript',
-    certificate: 'Certificate',
-    id: 'ID Proof',
-    other: 'Other',
-  };
-
-  return html`
-    <div class="repeater-item" data-index="${index}" data-item-id="${escapeHtml(doc.id)}">
-      <div class="repeater-head">
-        <div style="display:flex; align-items:center; gap:var(--ff-space-2); flex-wrap:wrap;">
-          <strong>${escapeHtml(doc.name || doc.fileName)}</strong>
-          <span class="ff-chip" style="text-transform:capitalize;">${escapeHtml(categoryLabel[doc.category ?? 'resume'] ?? doc.category ?? 'document')}</span>
-          ${doc.isDefault ? html`<span class="saved-flag"><span data-icon="check" data-size="12"></span> Default</span>` : ''}
-          ${sizeFormatted ? html`<span class="ff-meta">(${sizeFormatted})</span>` : ''}
-        </div>
-        <div class="ff-row">
-          ${!doc.isDefault
-            ? html`
-                <button class="ff-btn ff-btn-ghost ff-btn-sm" data-action="set-default-document" data-id="${escapeHtml(doc.id)}" type="button" title="Set as default">
-                  Set default
-                </button>
-              `
-            : ''}
-          ${doc.dataUrl
-            ? html`
-                <button class="ff-btn ff-btn-ghost ff-btn-icon ff-btn-sm" data-action="download-document" data-id="${escapeHtml(doc.id)}" type="button" title="Download">
-                  <span data-icon="download" data-size="13"></span>
-                </button>
-              `
-            : ''}
-          <button class="ff-btn ff-btn-ghost ff-btn-icon ff-btn-sm" data-action="remove-document" data-id="${escapeHtml(doc.id)}" type="button" title="Delete">
-            <span data-icon="trash" data-size="13"></span>
-          </button>
-        </div>
-      </div>
-      <div class="repeater-body">
-        ${grid([
-          textField({ name: 'name', label: 'Title / Label', value: doc.name }),
-          selectField({
-            name: 'category',
-            label: 'Category',
-            value: doc.category ?? 'resume',
-            options: [
-              { label: 'Resume / CV', value: 'resume' },
-              { label: 'Cover Letter', value: 'cover-letter' },
-              { label: 'Transcript', value: 'transcript' },
-              { label: 'Certificate', value: 'certificate' },
-              { label: 'ID Proof', value: 'id' },
-              { label: 'Other', value: 'other' },
-            ],
-          }),
-        ])}
-        ${grid([
-          textField({
-            name: 'fileName',
-            label: 'Original File Name',
-            value: doc.fileName,
-            readonly: true,
-          }),
-          textField({
-            name: 'keywords',
-            label: 'Keywords (comma-separated)',
-            value: (doc.keywords ?? []).join(', '),
-            hint: 'E.g. resume, frontend, react, sde',
-          }),
-        ])}
-      </div>
-    </div>
-  `;
-}
-
 export type ProfileSectionView = {
   personal: (p: UserProfile, extracted?: string) => TemplateResult;
   education: (p: UserProfile) => TemplateResult;
@@ -706,7 +551,6 @@ export type ProfileSectionView = {
   projects: (p: UserProfile) => TemplateResult;
   achievements: (p: UserProfile) => TemplateResult;
   links: (p: UserProfile) => TemplateResult;
-  documents: (p: UserProfile) => TemplateResult;
   preferences: (p: UserProfile) => TemplateResult;
 };
 
@@ -718,7 +562,6 @@ export const PROFILE_VIEWS: ProfileSectionView = {
   projects: projectsView,
   achievements: achievementsView,
   links: linksView,
-  documents: documentsView,
   preferences: preferencesView,
 };
 

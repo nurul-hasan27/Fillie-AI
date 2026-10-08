@@ -103,7 +103,7 @@ const overlay = new FillieOverlay({
   onSkip: (plan) => void skipQuestion(plan),
   onRegenerate: (plan) => void regenerate(plan),
   onFocusField: (fieldId) => void focusById(fieldId),
-  onOpenSettings: () => void chrome.runtime?.openOptionsPage?.(),
+  onOpenSettings: () => void sendMessage({ type: 'fillie:open-app', hash: '#/settings/ai' }).catch(() => undefined),
   onDismiss: () => {
     resolveResumePick(null);
     overlay.unmount();
@@ -284,11 +284,13 @@ async function run(): Promise<void> {
     state.plans = response.plans;
 
     overlay.setAiSource(describeServed(response.servedBy, response.switchedFrom));
+    overlay.setAiMissing(response.aiReady === false);
     state.aiCalls = response.aiCalls ?? 0;
     state.memoryHits = response.memoryHits ?? 0;
 
     renderScanning('Filling what it can confidently answer', state.plans.length, state.plans.length);
     await fillReadyFields({ silent: true });
+    void trackApplication();
 
     setupObserver();
     renderTasks();
@@ -734,13 +736,21 @@ async function reportQuality(): Promise<void> {
 
 let tracked = false;
 
-/** Adds this application to the tracker, once per page. */
+/** The page's readable text plus every question on the form: what the model reads to fill in the tracker. */
+function wholeFormText(): string {
+  const questions = [...state.fields.values()].map((field) => `- ${field.label}${field.options?.length ? ` (${field.options.slice(0, 12).join(' / ')})` : ''}`);
+  return `${extractReadableText()}\n\nFORM QUESTIONS:\n${questions.join('\n')}`.slice(0, 14_000);
+}
+
+/**
+ * Adds this application to the tracker, once per page. Called as soon as Fillie has filled
+ * the form (and again on submit, which is then a no-op), so a form you fill always shows up.
+ */
 async function trackApplication(): Promise<void> {
   if (tracked || !state.plans.some((plan) => plan.fillResult?.filled)) return;
   tracked = true;
   try {
-    await sendMessage({ type: 'fillie:apps-track', context: state.context, resumeId: state.resumeId });
-    void reportQuality();
+    await sendMessage({ type: 'fillie:apps-track', context: state.context, resumeId: state.resumeId, formText: wholeFormText() });
   } catch {
     tracked = false; // allow another try (e.g. from the button)
   }
@@ -777,8 +787,15 @@ function collectAnswersToLearn(): Array<{ question: string; answer: string }> {
   return [...entries].map(([question, answer]) => ({ question, answer }));
 }
 
+let qualityReported = false;
+
 async function learnFromPage(): Promise<void> {
   void trackApplication();
+  // Accuracy is measured when the user is done: how many answers they changed after Fillie filled them.
+  if (!qualityReported && state.plans.some((plan) => plan.fillResult?.filled)) {
+    qualityReported = true;
+    void reportQuality();
+  }
   const entries = collectAnswersToLearn();
   if (!entries.length) return;
   try {
