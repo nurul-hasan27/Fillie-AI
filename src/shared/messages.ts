@@ -178,6 +178,7 @@ export type BackgroundMessage =
   | { type: 'fillie:sign-out' }
   | { type: 'fillie:checkout'; currency: 'INR' | 'USD'; codes?: string[] }
   | { type: 'fillie:checkout-quote'; codes: string[] }
+  | { type: 'fillie:list-offers' }
   | { type: 'fillie:feedback'; rating: number | null; kind: 'review' | 'bug' | 'idea'; message: string }
   | { type: 'fillie:set-share-offers'; value: boolean }
   | { type: 'fillie:report-quality'; filled: number; edited: number; device: DeviceHashes }

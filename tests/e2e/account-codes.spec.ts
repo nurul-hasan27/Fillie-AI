@@ -39,6 +39,7 @@ const STUB = () => {
     if (message.type === 'fillie:account-status' || message.type === 'fillie:refresh-payment') return answer(status());
     if (message.type === 'fillie:checkout-quote') return answer({ ok: true, quotes: { INR: quote('INR', message.codes ?? []), USD: quote('USD', message.codes ?? []) } });
     if (message.type === 'fillie:checkout') return answer({ ok: true });
+    if (message.type === 'fillie:list-offers') return answer({ ok: true, offers: [{ code: 'DIWALI5', title: 'Diwali sale', discount_bps: 500, ends_at: null, left: null }, { code: 'FIRST100', title: 'First 100 users', discount_bps: 1500, ends_at: null, left: 12 }] });
     return real(message, callback);
   };
 };
@@ -82,6 +83,37 @@ test.describe('Account: creator and offer codes', () => {
     await page.locator('[data-action="remove-code"][data-code="ASHA10"]').click();
     await expect(page.locator('.code-applied li')).toHaveCount(1);
     await expect(page.locator('.price-sum .total')).toContainText('₹426.55');
+    await page.close();
+  });
+
+  test('Explore offers lists the admin\'s public offers, and Apply puts one on the order', async ({ fillie }) => {
+    const page = await fillie.context.newPage();
+    await page.addInitScript(STUB);
+    await page.goto(`chrome-extension://${fillie.extensionId}/pages/app.html#/account`);
+    await expect(page.locator('.code-multi')).toHaveText('(multiple coupons applicable)');
+    await page.locator('[data-action="explore-offers"]').click();
+    const modal = page.locator('.offers-modal');
+    await expect(modal).toBeVisible();
+    await expect(modal.locator('.offers-note')).toContainText("creator's promo code");
+    await expect(modal.locator('.offers-list li')).toHaveCount(2);
+    await expect(modal.locator('.offers-list li').nth(1)).toContainText('12 left');
+    expect(await modal.textContent()).not.toContain('ASHA10'); // creator codes are never listed
+    await page.screenshot({ path: '/tmp/claude-501/ext-offers.png' });
+
+    // A click inside the window keeps it open; the backdrop closes it.
+    await modal.locator('h2').click();
+    await expect(modal).toBeVisible();
+    await page.locator('.offers-back').click({ position: { x: 5, y: 5 } });
+    await expect(modal).toHaveCount(0);
+
+    await page.locator('[data-action="explore-offers"]').click();
+    await page.locator('[data-action="use-offer"][data-code="DIWALI5"]').click();
+    await expect(modal).toHaveCount(0);
+    await expect(page.locator('.code-applied li')).toContainText('DIWALI5');
+    await expect(page.locator('.price-sum .total')).toContainText('₹426.55'); // 5% off ₹449
+    // Open again: the applied one shows as applied.
+    await page.locator('[data-action="explore-offers"]').click();
+    await expect(page.locator('.offer-applied')).toHaveCount(1);
     await page.close();
   });
 

@@ -32,7 +32,7 @@ import { resumeView } from './views/resume';
 import { applicationEditor, databaseView, type DatabaseState } from './views/database';
 import { accountView, type AccountState } from './views/account';
 import { celebrate } from '../ui/confetti';
-import { rejectionNote, type QuoteSet } from '../core/cloud/money';
+import { rejectionNote, type PublicOffer, type QuoteSet } from '../core/cloud/money';
 import { computeHashes } from '../core/cloud/fingerprint';
 import { newApplication } from '../core/cloud/applications';
 import type { Application, ApplicationStatus, OAuthProvider } from '../core/cloud/types';
@@ -76,6 +76,8 @@ interface AppState {
   account: AccountState;
   memoryQuery: string;
   theme: 'light' | 'dark' | 'system';
+  /** Interview notifications on or off (on unless switched off). */
+  reminders: boolean;
   importedFile?: string;
   importWarnings: string[];
   pendingSuggestions?: DeepPartial<UserProfile>;
@@ -106,9 +108,10 @@ const state: AppState = {
   resumes: { resumes: [], defaultId: '' },
   activeResumeId: '',
   db: { rows: [], hasMore: false, loading: false, loaded: false, localOnly: false, signedIn: false, search: '', status: 'all' },
-  account: { status: null, mode: 'signin', busy: '', feedbackRating: 0, codes: [], quotes: null, codeBusy: false, codeNote: '', codesSupported: true },
+  account: { status: null, mode: 'signin', busy: '', feedbackRating: 0, codes: [], quotes: null, codeBusy: false, codeNote: '', codesSupported: true, offers: { open: false, loading: false, error: '', list: [] } },
   memoryQuery: '',
   theme: (localStorage.getItem('fillie:theme') as AppState['theme']) ?? 'system',
+  reminders: true,
   importWarnings: [],
   connections: {},
   saveState: 'idle',
@@ -347,7 +350,7 @@ function body(): TemplateResult {
     case 'memory':
       return memorySettingsView(state.memory.length, state.diagnostics.cacheHits);
     case 'privacy':
-      return privacyView(state.settings);
+      return privacyView(state.settings, state.reminders);
     case 'appearance':
       return appearanceView(state.theme);
     case 'advanced':
@@ -1054,6 +1057,12 @@ app.addEventListener('click', async (event) => {
       render();
       return;
     }
+    case 'toggle-reminders': {
+      state.reminders = (target as HTMLInputElement).checked;
+      void chrome.storage?.local?.set?.({ 'fillie:reminders': state.reminders });
+      toast(state.reminders ? 'Interview reminders are on' : 'Interview reminders are off');
+      return;
+    }
     case 'toggle-share-offers': {
       const value = (target as HTMLInputElement).checked;
       const result = await sendMessage<{ ok: boolean; error?: string }>({ type: 'fillie:set-share-offers', value });
@@ -1107,6 +1116,30 @@ app.addEventListener('click', async (event) => {
         // A code may have stopped working since it was applied; show the prices again.
         void refreshQuotes(state.account.codes);
       }
+      return;
+    }
+    case 'explore-offers': {
+      state.account.offers = { open: true, loading: true, error: '', list: state.account.offers.list };
+      render();
+      try {
+        const result = await sendMessage<{ ok: boolean; error?: string; offers?: PublicOffer[] }>({ type: 'fillie:list-offers' });
+        state.account.offers = { open: true, loading: false, error: result.ok ? '' : (result.error ?? 'Could not load offers.'), list: result.offers ?? [] };
+      } catch {
+        state.account.offers = { open: true, loading: false, error: 'Could not load offers.', list: [] };
+      }
+      render();
+      return;
+    }
+    case 'close-offers':
+      // A click inside the window itself must not close it; only the backdrop and the × do.
+      if ((event.target as HTMLElement).closest('[data-keep-open]') && !(event.target as HTMLElement).closest('.offers-close')) return;
+      state.account.offers = { ...state.account.offers, open: false };
+      render();
+      return;
+    case 'use-offer': {
+      const code = target.getAttribute('data-code') ?? '';
+      state.account.offers = { ...state.account.offers, open: false };
+      await refreshQuotes([code, ...state.account.codes.filter((c) => c !== code)], code);
       return;
     }
     case 'apply-code': {
@@ -1845,6 +1878,8 @@ async function runAuth(busy: string, call: () => Promise<unknown>): Promise<void
   await loadAccount();
   // Signing in changes what the Database shows (cloud rows) and what is backed up.
   await Promise.all([refreshMemory(), refreshResumes()]);
+  const savedReminders = (await chrome.storage?.local?.get?.('fillie:reminders').catch(() => undefined)) as Record<string, unknown> | undefined;
+  state.reminders = savedReminders?.['fillie:reminders'] !== false;
   state.profile = await loadProfile();
   state.store.set(state.profile);
   render();

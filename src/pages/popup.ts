@@ -86,7 +86,6 @@ function render(state: {
       ? html`
           <button class="pop-user" data-action="open-account" type="button" title="${escapeHtml(email)}">
             <span class="pop-avatar" aria-hidden="true">${escapeHtml(email.charAt(0).toUpperCase())}</span>
-            <span class="pop-user-email">${escapeHtml(email)}</span>
           </button>
         `
       : html`<button class="pop-signin" data-action="open-account" type="button">Sign in</button>`
@@ -95,14 +94,13 @@ function render(state: {
   const premium = access
     ? access.plan === 'paid'
       ? html`<span class="pop-premium" title="You have unlimited access">${CROWN}Premium</span>`
-      : html`<button class="pop-getpremium" data-action="open-account" type="button">Get premium</button>`
+      : html`<button class="pop-getpremium" data-action="open-account" type="button">${CROWN}Get premium</button>`
     : '';
 
   const header = html`
     <header class="pop-head rise" style="--i:0">
-      <div class="pop-brand">
+      <div class="pop-brand" role="img" aria-label="Fillie">
         <span class="pop-mark" aria-hidden="true"></span>
-        <strong class="pop-name">Fillie</strong>
       </div>
       <div class="pop-head-right">
         ${account}${premium}
@@ -353,8 +351,19 @@ async function openApp(path = ''): Promise<void> {
   window.close();
 }
 
+/** The theme chosen in Fillie > Appearance, or the system's when it is left on "System". */
+async function chosenTheme(): Promise<'light' | 'dark'> {
+  try {
+    const stored = (await chrome.storage.local.get('fillie:theme'))['fillie:theme'];
+    if (stored === 'light' || stored === 'dark') return stored;
+  } catch {
+    /* fall through to the system theme */
+  }
+  return preferredTheme();
+}
+
 async function init(): Promise<void> {
-  setTheme(preferredTheme());
+  setTheme(await chosenTheme());
   const [cached, tab] = await Promise.all([readCache(), activeTab()]);
   const pageOk = await isFormPage(tab);
 

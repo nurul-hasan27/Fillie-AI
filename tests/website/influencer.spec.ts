@@ -155,6 +155,27 @@ test('the creator\'s own code is refused at checkout (self-referral)', async ({ 
   await page.close();
 });
 
+test('Explore offers shows the admin\'s public offers (never creator codes) and Apply puts one on the order', async ({ browser }) => {
+  await fake.sql(`insert into public.discount_offers (code, title, discount_bps, listed) values ('SECRET15', 'Secret', 1500, false)`);
+  const page = await open(browser, '/', 'rahul@example.com');
+  await page.getByRole('button', { name: 'Pay ₹449 or $5' }).click();
+  const modal = page.getByRole('dialog');
+  await expect(modal.getByText('(multiple coupons applicable)')).toBeVisible();
+  await modal.getByRole('button', { name: 'Explore offers' }).click();
+  await expect(modal.locator('.offers-note')).toContainText("creator's promo code");
+  const rows = modal.locator('.offers-list li');
+  await expect(rows).toHaveCount(1);
+  await expect(rows.first()).toContainText('Diwali sale');
+  await expect(rows.first()).toContainText('DIWALI5');
+  await expect(modal).not.toContainText('ASHA10');
+  await expect(modal).not.toContainText('SECRET15');
+  await shot(page, 'checkout-offers');
+  await rows.first().getByRole('button', { name: 'Apply' }).click();
+  await expect(modal.locator('.code-applied li')).toContainText('DIWALI5');
+  await expect(modal.getByRole('button', { name: /Pay .*₹426\.55/ })).toBeVisible();
+  await page.close();
+});
+
 test('the creator\'s dashboard shows the order, privately, with the money still pending', async ({ browser }) => {
   const page = await open(browser, '/influencer', 'asha@example.com');
   await expect(page.getByText('Available to withdraw')).toBeVisible();

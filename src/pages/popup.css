@@ -80,10 +80,9 @@ html { background: #f6f5f4; overflow: hidden; }
 }
 
 .pop-brand { display: flex; align-items: center; gap: 9px; min-width: 0; }
-.pop-mark { width: 30px; height: 30px; flex: none; border-radius: 8px; background: url('../assets/icon-48.png') center / contain no-repeat; }
-.pop-name { font-family: var(--ff-font-serif); font-size: 20px; font-weight: 500; letter-spacing: -0.02em; }
+.pop-mark { width: 38px; height: 38px; flex: none; border-radius: 10px; background: url('../assets/icon-48.png') center / contain no-repeat; }
 
-.pop-head-right { margin-left: auto; display: flex; align-items: center; gap: 6px; min-width: 0; }
+.pop-head-right { margin-left: auto; display: flex; align-items: center; gap: 6px; flex: none; }
 
 .pop-user,
 .pop-signin,
@@ -102,18 +101,19 @@ html { background: #f6f5f4; overflow: hidden; }
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.2s ease;
 }
 
-.pop-user { max-width: 142px; padding: 0 10px 0 3px; background: var(--pop-card); border: 1px solid var(--pop-hair); color: var(--pop-ink); }
+.pop-user { width: 32px; height: 32px; padding: 0; justify-content: center; background: var(--pop-card); border: 1px solid var(--pop-hair); color: var(--pop-ink); }
 .pop-user:hover { border-color: var(--pop-hair-strong); }
-.pop-avatar { display: grid; place-items: center; flex: none; width: 22px; height: 22px; border-radius: 50%; background: var(--pop-midnight); color: #fff; font-size: 11px; font-weight: 700; }
-.pop-user-email { overflow: hidden; text-overflow: ellipsis; font-weight: 500; }
+.pop-avatar { display: grid; place-items: center; flex: none; width: 24px; height: 24px; border-radius: 50%; background: var(--pop-midnight); color: #fff; font-size: 11px; font-weight: 700; }
 .pop-signin { padding: 0 12px; background: var(--pop-blue); border: 0; color: #fff; }
 .pop-signin:hover { background: var(--pop-blue-hover); }
 
 /* Premium is a quiet marigold mark; everyone else sees a small blue way to get it. */
 .pop-premium { padding: 0 10px; background: var(--pop-marigold-soft); color: var(--pop-marigold-ink); cursor: default; font-weight: 600; }
 .pop-premium .pop-crown { color: #e89d01; }
-.pop-getpremium { padding: 0 11px; background: var(--pop-sky); border: 0; color: var(--pop-sky-ink); }
-.pop-getpremium:hover { background: color-mix(in srgb, var(--pop-sky) 70%, var(--pop-blue) 30%); }
+.pop-getpremium { padding: 0 12px 0 10px; background: var(--pop-marigold); border: 0; color: #1c1500; font-weight: 700; box-shadow: 0 0 0 0 rgba(255, 177, 16, 0.5); animation: pop-glow 2.8s ease-out 0.6s 2; }
+.pop-getpremium .pop-crown { color: #1c1500; }
+.pop-getpremium:hover { background: #ffc233; transform: translateY(-1px); }
+@keyframes pop-glow { 0% { box-shadow: 0 0 0 0 rgba(255, 177, 16, 0.55); } 70%, 100% { box-shadow: 0 0 0 9px rgba(255, 177, 16, 0); } }
 
 .pop-ext { width: 28px; justify-content: center; padding: 0; background: transparent; border: 1px solid var(--pop-hair); color: var(--pop-ink-2); }
 .pop-ext:hover { background: var(--pop-card); color: var(--pop-ink); }
@@ -247,6 +247,6 @@ html { background: #f6f5f4; overflow: hidden; }
 .popup[data-phase='enter'] .rise { animation: pop-rise 0.28s ease both; animation-delay: calc(var(--i, 0) * 32ms); }
 
 @media (prefers-reduced-motion: reduce) {
-  .rise, .pop-scanning .pop-orb, .skeleton { animation: none !important; }
+  .rise, .pop-scanning .pop-orb, .skeleton, .pop-getpremium { animation: none !important; }
   * { transition-duration: 0.01ms !important; }
 }
