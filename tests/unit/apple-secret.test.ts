@@ -112,7 +112,7 @@ describe('rotateAppleSecret', () => {
   it('names every missing setting, and never a value', async () => {
     const fetchMock = ok();
     const result = await rotateAppleSecret({ teamId: 'T' }, memory(), fetchMock, {}, NOW);
-    expect(result).toMatchObject({ ok: false, status: 500, missing: ['APPLE_KEY_ID', 'APPLE_SERVICES_ID', 'APPLE_PRIVATE_KEY', 'SUPABASE_MANAGEMENT_TOKEN', 'SUPABASE_PROJECT_REF'] });
+    expect(result).toMatchObject({ ok: false, status: 500, missing: ['APPLE_KEY_ID', 'APPLE_SERVICES_ID', 'APPLE_PRIVATE_KEY', 'MANAGEMENT_ACCESS_TOKEN', 'project reference (derived from SUPABASE_URL)'] });
     expect(fetchMock).not.toHaveBeenCalled();
   });
 

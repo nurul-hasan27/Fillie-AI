@@ -1,7 +1,7 @@
 // Renews the Sign in with Apple client secret (it expires every 6 months) and updates Supabase Auth with it.
 // Called on a schedule by .github/workflows/rotate-apple-secret.yml; see docs/APPLE_SIGN_IN.md.
 // Deploy with: supabase functions deploy rotate-apple-secret --no-verify-jwt
-// Secrets: APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_SERVICES_ID, APPLE_PRIVATE_KEY, SUPABASE_MANAGEMENT_TOKEN,
+// Secrets: APPLE_TEAM_ID, APPLE_KEY_ID, APPLE_SERVICES_ID, APPLE_PRIVATE_KEY, MANAGEMENT_ACCESS_TOKEN,
 //          APPLE_ROTATION_TOKEN (shared with the scheduler), optional APPLE_ROTATE_BEFORE_DAYS (default 45).
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { reply, corsHeaders } from '../_shared/cors.ts';
@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
   const result = await rotateAppleSecret(
     {
       teamId: Deno.env.get('APPLE_TEAM_ID'), keyId: Deno.env.get('APPLE_KEY_ID'), servicesId: Deno.env.get('APPLE_SERVICES_ID'),
-      privateKey: Deno.env.get('APPLE_PRIVATE_KEY'), managementToken: Deno.env.get('SUPABASE_MANAGEMENT_TOKEN'),
+      privateKey: Deno.env.get('APPLE_PRIVATE_KEY'), managementToken: Deno.env.get('MANAGEMENT_ACCESS_TOKEN'),
       projectRef: new URL(supabaseUrl).hostname.split('.')[0],
       rotateBeforeDays: Number(Deno.env.get('APPLE_ROTATE_BEFORE_DAYS')) || undefined,
     },

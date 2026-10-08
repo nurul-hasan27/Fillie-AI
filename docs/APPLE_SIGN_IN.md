@@ -26,18 +26,18 @@ You need your Apple values from developer.apple.com (the ones already entered in
 | `APPLE_KEY_ID` | Certificates, Identifiers & Profiles → Keys → your "Sign in with Apple" key, 10 characters |
 | `APPLE_SERVICES_ID` | Identifiers → Services IDs, for example `com.yourname.fillie.web` (the *Client ID* in Supabase) |
 | `APPLE_PRIVATE_KEY` | The full contents of the downloaded `AuthKey_XXXXXXXXXX.p8` file, including the BEGIN/END lines |
-| `SUPABASE_MANAGEMENT_TOKEN` | supabase.com → Account → Access Tokens → Generate new token (`sbp_…`). It can change your projects' settings, so keep it only here. Supabase does not allow secret names starting with `SUPABASE_`; if `secrets set` refuses this name, use `MANAGEMENT_ACCESS_TOKEN` and set the same name in `supabase/functions/rotate-apple-secret/index.ts`. |
+| `MANAGEMENT_ACCESS_TOKEN` | supabase.com → Account → Access Tokens → Generate new token (`sbp_…`). It can change your projects' settings, so keep it only here. (Supabase reserves secret names that start with `SUPABASE_`, hence the different name.) |
 | `APPLE_ROTATION_TOKEN` | Any long random string, at least 24 characters (`openssl rand -hex 32`). The same value goes into GitHub. |
 | `APPLE_ROTATE_BEFORE_DAYS` | Optional, default `45` |
 
 1. Set the secrets and deploy (the function must accept calls without a Supabase login, and checks `APPLE_ROTATION_TOKEN` itself):
    ```bash
    supabase secrets set APPLE_TEAM_ID=... APPLE_KEY_ID=... APPLE_SERVICES_ID=... \
-     APPLE_ROTATION_TOKEN=$(openssl rand -hex 32) SUPABASE_MANAGEMENT_TOKEN=sbp_...
+     APPLE_ROTATION_TOKEN=$(openssl rand -hex 32) MANAGEMENT_ACCESS_TOKEN=sbp_...
    supabase secrets set APPLE_PRIVATE_KEY="$(cat AuthKey_XXXXXXXXXX.p8)"
    supabase functions deploy rotate-apple-secret --no-verify-jwt
    ```
-2. In GitHub → repository → Settings → Secrets and variables → Actions, add `SUPABASE_URL` (already there for the keep-alive job) and `APPLE_ROTATION_TOKEN` (the value you set above; read it back with `supabase secrets list` is not possible, so keep a copy).
+2. In GitHub → repository → Settings → Secrets and variables → Actions, add `SUPABASE_URL` (already there for the keep-alive job) and `APPLE_ROTATION_TOKEN` (the value you set above; Supabase cannot show secrets again, so keep a copy).
 3. Check it without changing anything:
    ```bash
    curl -sS -X POST "$SUPABASE_URL/functions/v1/rotate-apple-secret" \
